@@ -10,30 +10,68 @@ permissions:
   contents: read
 
 jobs:
-  lint:
-    name: Lint Shell Scripts
+  shell-lint:
+    name: Shell Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install shellcheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
-      - name: Run shellcheck
+      - name: Run shellcheck (non-fatal warnings)
         run: |
+          set -e
           find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 shellcheck -x || true
+
+  markdown-lint:
+    name: Markdown Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node (markdownlint)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install markdownlint-cli
+        run: npm install -g markdownlint-cli@0.39.0
+      - name: Run markdownlint
+        run: markdownlint . --ignore TOOLS_MATRIX.md || true
+
   pin-audit:
     name: Pin Audit
     runs-on: ubuntu-latest
+    needs: [shell-lint]
     steps:
       - uses: actions/checkout@v4
       - name: Run Pin Audit
         run: bash scripts/validation/verify-pins.sh
-  smoke-minimal:
-    name: Smoke Minimal (Linux)
+
+  docs-check:
+    name: Docs Consistency
     runs-on: ubuntu-latest
+    needs: [pin-audit]
     steps:
       - uses: actions/checkout@v4
-      - name: Show versions manifest
-        run: cat manifests/versions.yaml
-      - name: Placeholder smoke
-        run: |
-          echo "TODO: integrate minimal profile setup once profile system lands"
+      - name: Verify generated docs up-to-date
+        run: bash scripts/ci/check-docs.sh
+
+  smoke:
+    name: Smoke Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: [docs-check]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run smoke script
+        run: bash scripts/ci/run-smoke.sh
+      - name: Upload smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ matrix.os }}
+          path: |
+            README.md
+            manifests/versions.yaml
+            TOOLS_MATRIX.md

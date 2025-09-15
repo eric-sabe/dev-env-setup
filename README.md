@@ -1,5 +1,7 @@
 # Development Environment Setup Scripts
 
+[![CI](https://github.com/eric-sabe/dev-env-setup/actions/workflows/ci.yml/badge.svg)](https://github.com/eric-sabe/dev-env-setup/actions/workflows/ci.yml) [![Markdown Lint](https://img.shields.io/badge/markdownlint-config-blue)](#)
+
 A comprehensive collection of scripts to set up and manage development environments for college computer science students across macOS, Linux, and Windows platforms.
 
 ## 🚀 Quick Start

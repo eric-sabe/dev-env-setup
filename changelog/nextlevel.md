@@ -292,4 +292,5 @@ Progress snapshots appended here with timestamped mini-sections as work proceeds
 [2025-09-15T02:30Z] Pin audit refined to whitelist new resolver patterns; docs matrix regenerated.
 [2025-09-15T02:40Z] Refactored setup-eclipse with shared utils, safety flags, idempotent download.
 [2025-09-15T02:45Z] Refactored setup-vscode with shared utils, idempotent extension installs.
+[2025-09-15T03:05Z] Phase 2 CI expansion: added markdownlint config, docs consistency & smoke scripts, expanded workflow with matrix (ubuntu/macos) and artifacts, README badges inserted.
 ```
