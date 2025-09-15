@@ -2,7 +2,8 @@
 # System Health Check Script
 # Comprehensive development environment diagnostic tool
 
-set -e  # Exit on any error
+set -Eeuo pipefail  # Stricter error handling
+trap 'echo "[ERROR] Health check aborted at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
 
 # Colors for output
 RED='\033[0;31m'

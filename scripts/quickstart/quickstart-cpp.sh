@@ -2,7 +2,8 @@
 # C++ Project Quickstart Script
 # Creates new C++ projects with CMake
 
-set -e  # Exit on any error
+set -Eeuo pipefail
+trap 'echo "[ERROR] quickstart-cpp failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
 
 # Colors for output
 RED='\033[0;31m'
@@ -411,7 +412,6 @@ EOF
 #!/bin/bash
 # Build script for $project_name
 
-set -e
 
 # Colors
 RED='\033[0;31m'

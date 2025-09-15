@@ -2,7 +2,8 @@
 # Node.js Project Quickstart Script
 # Creates a comprehensive Node.js project with best practices
 
-set -e  # Exit on any error
+set -Eeuo pipefail
+trap 'echo "[ERROR] quickstart-node failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
 
 # Colors for output
 RED='\033[0;31m'
@@ -144,52 +145,63 @@ create_project_directory() {
 initialize_package_json() {
     log_info "Initializing package.json..."
 
-    local package_json="{
-  \"name\": \"$PROJECT_NAME\",
-  \"version\": \"1.0.0\",
-  \"description\": \"$PROJECT_DESC\",
-  \"main\": \"${USE_TYPESCRIPT:+dist/}index.js\",
-  \"scripts\": {
-    \"start\": \"${USE_TYPESCRIPT:+npm run build && }node ${USE_TYPESCRIPT:+dist/}index.js\",
-    \"dev\": \"${USE_TYPESCRIPT:+npm run build && }node ${USE_TYPESCRIPT:+dist/}index.js\",
-    \"test\": \"jest\",
-    \"lint\": \"eslint src/**/*.js\",
-    \"lint:fix\": \"eslint src/**/*.js --fix\""
-}
-
-    # Add TypeScript scripts if needed
+    # Determine scripts JSON block
     if [[ "$USE_TYPESCRIPT" == "true" ]]; then
-        package_json="${package_json%,*}
-    \"build\": \"tsc\",
-    \"dev\": \"ts-node src/index.ts\",
-    \"start\": \"npm run build && node dist/index.js\""
-}"
+      START_SCRIPT='npm run build && node dist/index.js'
+      DEV_SCRIPT='ts-node src/index.ts'
+      BUILD_SCRIPT='"build": "tsc",'
+      MAIN_FIELD='dist/index.js'
+    else
+      START_SCRIPT='node index.js'
+      DEV_SCRIPT='node index.js'
+      BUILD_SCRIPT=''
+      MAIN_FIELD='index.js'
     fi
 
-    # Add author and repository if provided
-    if [[ -n "$AUTHOR" ]]; then
-        package_json="${package_json%,*}
-  \"author\": \"$AUTHOR\","
-    fi
-
+    # Optional fields
+    local author_field="" repo_field=""
+    [[ -n "$AUTHOR" ]] && author_field="  \"author\": \"$AUTHOR\","
     if [[ -n "$GIT_REPO" ]]; then
-        package_json="${package_json%,*}
-  \"repository\": {
-    \"type\": \"git\",
-    \"url\": \"$GIT_REPO\"
-  },"
+      repo_field=$(cat <<EOF
+  "repository": {
+    "type": "git",
+    "url": "$GIT_REPO"
+  },
+EOF
+)
     fi
 
-    # Add license and keywords
-    package_json="${package_json%,*}
-  \"license\": \"MIT\",
-  \"keywords\": [\"nodejs\"],
-  \"engines\": {
-    \"node\": \">=14.0.0\"
-  }
-}"
+    cat > package.json <<EOF
+{
+  "name": "$PROJECT_NAME",
+  "version": "1.0.0",
+  "description": "$PROJECT_DESC",
+  "main": "$MAIN_FIELD",
+  "scripts": {
+    $BUILD_SCRIPT
+    "start": "$START_SCRIPT",
+    "dev": "$DEV_SCRIPT",
+    "test": "jest",
+    "lint": "eslint src/**/*.js",
+    "lint:fix": "eslint src/**/*.js --fix"
+  },
+${author_field}
+${repo_field}  "license": "MIT",
+  "keywords": ["nodejs"],
+  "engines": { "node": ">=14.0.0" }
+}
+EOF
 
-    echo "$package_json" > package.json
+    # Compact JSON if jq present
+    if command -v jq &>/dev/null; then
+      tmpfile=$(mktemp)
+      if jq . package.json > "$tmpfile" 2>/dev/null; then
+        mv "$tmpfile" package.json
+      else
+        rm -f "$tmpfile"
+        log_warning "jq failed to validate JSON; keeping original"
+      fi
+    fi
 
     log_success "package.json created"
 }

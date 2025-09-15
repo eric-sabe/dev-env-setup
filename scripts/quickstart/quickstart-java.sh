@@ -2,7 +2,8 @@
 # Java Project Quickstart Script
 # Creates new Java projects with Maven or Gradle
 
-set -e  # Exit on any error
+set -Eeuo pipefail
+trap 'echo "[ERROR] quickstart-java failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
 
 # Colors for output
 RED='\033[0;31m'

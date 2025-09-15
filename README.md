@@ -28,7 +28,7 @@ A comprehensive collection of scripts to set up and manage development environme
 
 5. **Start coding!**
 
-## � What You Get
+## ✅ What You Get
 
 ### Complete Development Environment
 - **Languages**: Python, Node.js, Java, C++
@@ -60,12 +60,55 @@ A comprehensive collection of scripts to set up and manage development environme
 | `management/env-manager.sh` | Environment management tool |
 | `management/health-check.sh` | System health diagnostics |
 | `courses/setup-database.sh` | Database course setup |
+| `utils/diagnose.sh` | Aggregate diagnostics snapshot |
+| `utils/emergency-recovery.sh` | Last-resort recovery helpers |
+| `utils/performance-tune.sh` | Performance snapshot suggestions |
+| `utils/semester-archive.sh` | Archive semester projects |
+| `setup/macos/cleanup-mac.sh` | macOS targeted cleanup wrapper |
+| `setup/linux/cleanup-linux.sh` | Linux targeted cleanup wrapper |
+| `setup/windows/cleanup-wsl.sh` | WSL targeted cleanup wrapper |
+| `scripts/validate.sh` | Static analysis runner (shellcheck) |
 
 ## 📖 Documentation
 
 - **[Complete Guide](guide.md)**: Detailed setup instructions, troubleshooting, and advanced usage
 - **Platform-specific guides** in the guide
 - **Script documentation** in each script file
+
+## 🧰 Utilities Overview
+
+Located in `scripts/utils` unless noted:
+
+- `cross-platform.sh`: Shared logging, platform detection, safety helpers.
+- `diagnose.sh`: Collects environment summary (system, tools, versions).
+- `emergency-recovery.sh`: Minimal automated recovery + diagnostics snapshot.
+- `performance-tune.sh`: Performance metrics snapshot (non-destructive).
+- `semester-archive.sh`: Compresses project directories for archival.
+- Cleanup wrappers: `setup/macos/cleanup-mac.sh`, `setup/linux/cleanup-linux.sh`, `setup/windows/cleanup-wsl.sh`.
+- Validation: `scripts/validate.sh` runs shellcheck when available.
+
+See `COVERAGE_MATRIX.md` for feature mapping and `DEFECTS.md` for improvement history.
+
+## 🔐 Security & Hardening
+
+Recent hardening improvements:
+- Unified strict Bash safety (`set -Eeuo pipefail`) and error traps across scripts.
+- Added optional MySQL secure configuration (interactive or automated) during database course setup.
+- Safer cleanup operations with dry-run and confirmation prompts (`cleanup-dev.sh`).
+- Centralized logging and platform detection via `cross-platform.sh` to reduce divergence.
+
+Recommended manual follow-ups (not automated):
+- Run `mysql_secure_installation` again if you need custom auth plugins or remote access changes.
+- Review database service bind addresses before exposing outside localhost.
+- Keep Docker Desktop / engine updated for CVE patches.
+
+## 🖥️ GPU / ML Setup
+
+`setup-ml.sh` now auto-detects NVIDIA GPUs (`nvidia-smi`) and installs GPU variants of TensorFlow / PyTorch when present. Use `--no-gpu` to force CPU-only installs:
+```
+./scripts/courses/setup-ml.sh --no-gpu
+```
+CUDA / cuDNN installation steps remain partially manual on some distros (RHEL/CentOS, macOS). The script logs guidance without failing if unsupported.
 
 ## 🎓 For Students
 

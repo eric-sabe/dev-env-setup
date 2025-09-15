@@ -1,47 +1,36 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # macOS Development Environment Setup Script
 # Comprehensive setup for CS students - macOS 12+ (Monterey or later)
 
-set -e  # Exit on any error
+set -Eeuo pipefail
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Source shared utilities (logging, platform detection, safety helpers)
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+UTILS_DIR="${SCRIPT_DIR%/setup/macos}/utils"
+if [[ -f "$UTILS_DIR/cross-platform.sh" ]]; then
+    # shellcheck source=../../utils/cross-platform.sh
+    source "$UTILS_DIR/cross-platform.sh"
+else
+    echo "[WARN] cross-platform utilities not found; proceeding with minimal safety" >&2
+fi
 
-# Logging functions
-log_info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
-}
+# Backwards-compatible aliases for prior log_* names used in docs
+log_warning() { log_warn "$@"; }
 
-log_success() {
-    echo -e "${GREEN}✅ $1${NC}"
-}
-
-log_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
-}
-
-log_error() {
-    echo -e "${RED}❌ $1${NC}"
-}
+trap 'log_error "macOS setup aborted at line $LINENO"' ERR
 
 # Check if running on macOS
 check_macos() {
-    if [[ "$OSTYPE" != "darwin"* ]]; then
-        log_error "This script is designed for macOS only."
+    if [[ "${PLATFORM:-}" != "macos" ]]; then
+        log_error "This script is designed for macOS only (detected: ${PLATFORM:-unknown})."
         exit 1
     fi
-
-    # Check macOS version (12+ required)
-    local macos_version=$(sw_vers -productVersion | cut -d. -f1)
-    if [[ $macos_version -lt 12 ]]; then
-        log_error "macOS 12 (Monterey) or later is required. Current version: $macos_version"
+    local macos_version
+    macos_version=$(sw_vers -productVersion | cut -d. -f1 || echo 0)
+    if (( macos_version < 12 )); then
+        log_error "macOS 12 (Monterey) or later is required. Current major version: $macos_version"
         exit 1
     fi
-
     log_success "macOS $macos_version detected"
 }
 

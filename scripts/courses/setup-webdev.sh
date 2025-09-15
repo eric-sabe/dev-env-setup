@@ -2,7 +2,12 @@
 # Web Development Course Setup Script
 # Installs web development tools and frameworks for web dev courses
 
-set -e  # Exit on any error
+set -Eeuo pipefail  # Exit on error, treat unset vars as error, and catch pipe failures
+trap 'echo "[ERROR] setup-webdev failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UTIL_DIR="${SCRIPT_DIR%/courses*/}/utils"
+[[ -f "$UTIL_DIR/cross-platform.sh" ]] && source "$UTIL_DIR/cross-platform.sh"
+pip_install() { (python3 -m pip install --user "$@" || python -m pip install --user "$@") || true; }
 
 # Colors for output
 RED='\033[0;31m'
@@ -83,7 +88,7 @@ install_python_web() {
     fi
 
     # Install pip packages for web development
-    pip install --user django flask fastapi uvicorn requests beautifulsoup4 selenium pytest
+    pip_install django flask fastapi uvicorn requests beautifulsoup4 selenium pytest
 
     log_success "Python web development packages installed"
 }
@@ -210,7 +215,8 @@ install_web_databases() {
     esac
 
     # Install database drivers
-    pip install --user psycopg2-binary sqlite3
+    # Use python -m pip for consistency; sqlite3 is part of stdlib (don't install non-existent package)
+    python3 -m pip install --user psycopg2-binary aiosqlite || python -m pip install --user psycopg2-binary aiosqlite || true
 
     log_success "Web databases installed"
 }

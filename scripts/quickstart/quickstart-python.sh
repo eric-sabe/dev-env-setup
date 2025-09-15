@@ -2,7 +2,8 @@
 # Python Project Quickstart Script
 # Creates a comprehensive Python project with best practices
 
-set -e  # Exit on any error
+set -Eeuo pipefail
+trap 'echo "[ERROR] quickstart-python failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
 
 # Colors for output
 RED='\033[0;31m'

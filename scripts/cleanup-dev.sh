@@ -2,7 +2,33 @@
 # Development Environment Cleanup Script
 # Cleans up and refreshes development environments
 
-set -e  # Exit on any error
+set -Eeuo pipefail  # Stricter error handling
+trap 'echo "[ERROR] Cleanup failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
+
+# Attempt to source shared utilities if present
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UTILS_DIR="$SCRIPT_DIR/utils"
+if [[ -f "$UTILS_DIR/cross-platform.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "$UTILS_DIR/cross-platform.sh"
+fi
+
+# Flags & Args
+DRY_RUN=false
+ASSUME_YES=false
+for arg in "$@"; do
+    case $arg in
+        --dry-run) DRY_RUN=true ;;
+        -y|--yes) ASSUME_YES=true ;;
+    esac
+done
+
+confirm_action() {
+    local msg=${1:-"Proceed?"}
+    if [[ $ASSUME_YES == true ]]; then return 0; fi
+    read -r -p "$msg (y/N): " ans
+    [[ $ans =~ ^[Yy]$ ]]
+}
 
 # Colors for output
 RED='\033[0;31m'
@@ -96,8 +122,12 @@ clean_dev_caches() {
 
     # Clean npm cache
     if command -v npm &>/dev/null; then
-        npm cache clean --force
-        log_success "npm cache cleaned"
+        if confirm_action "Purge npm cache?"; then
+            npm cache clean --force || true
+            log_success "npm cache cleaned"
+        else
+            log_info "Skipped npm cache"
+        fi
     fi
 
     # Clean yarn cache
@@ -114,14 +144,18 @@ clean_dev_caches() {
 
     # Clean Maven cache
     if [[ -d "$HOME/.m2/repository" ]]; then
-        rm -rf "$HOME/.m2/repository"/*
-        log_success "Maven cache cleaned"
+        if confirm_action "Delete Maven local repository cache?"; then
+            safe_rm_rf "$HOME/.m2/repository"/*
+            log_success "Maven cache cleaned"
+        fi
     fi
 
     # Clean Gradle cache
     if [[ -d "$HOME/.gradle/caches" ]]; then
-        rm -rf "$HOME/.gradle/caches"/*
-        log_success "Gradle cache cleaned"
+        if confirm_action "Delete Gradle caches?"; then
+            safe_rm_rf "$HOME/.gradle/caches"/*
+            log_success "Gradle cache cleaned"
+        fi
     fi
 
     # Clean Rust cache
@@ -147,33 +181,23 @@ clean_dev_caches() {
 
 # Clean IDE caches
 clean_ide_caches() {
-    log_info "Cleaning IDE caches..."
-
-    # VS Code
-    if [[ -d "$HOME/.vscode" ]]; then
-        rm -rf "$HOME/.vscode/Cache"/*
-        rm -rf "$HOME/.vscode/CachedData"/*
+    log_info "Cleaning IDE caches (interactive)..."
+    if confirm_action "Purge VS Code cache?" && [[ -d "$HOME/.vscode" ]]; then
+        safe_rm_rf "$HOME/.vscode/Cache"/* || true
+        safe_rm_rf "$HOME/.vscode/CachedData"/* || true
         log_success "VS Code cache cleaned"
     fi
-
-    # IntelliJ IDEA
-    if [[ -d "$HOME/.IntelliJIdea*" ]]; then
-        rm -rf "$HOME/.IntelliJIdea*/system/caches"/*
+    if confirm_action "Purge IntelliJ IDEA caches?" && compgen -G "$HOME/.IntelliJIdea*" > /dev/null; then
+        for d in $HOME/.IntelliJIdea*/system/caches; do [[ -d $d ]] && safe_rm_rf "$d"/*; done
         log_success "IntelliJ IDEA cache cleaned"
     fi
-
-    # Android Studio
-    if [[ -d "$HOME/.AndroidStudio*" ]]; then
-        rm -rf "$HOME/.AndroidStudio*/system/caches"/*
+    if confirm_action "Purge Android Studio caches?" && compgen -G "$HOME/.AndroidStudio*" > /dev/null; then
+        for d in $HOME/.AndroidStudio*/system/caches; do [[ -d $d ]] && safe_rm_rf "$d"/*; done
         log_success "Android Studio cache cleaned"
     fi
-
-    # Xcode (macOS)
-    if [[ "$PLATFORM" == "macos" ]]; then
-        if [[ -d "$HOME/Library/Developer/Xcode/DerivedData" ]]; then
-            rm -rf "$HOME/Library/Developer/Xcode/DerivedData"/*
-            log_success "Xcode DerivedData cleaned"
-        fi
+    if [[ "$PLATFORM" == "macos" ]] && confirm_action "Purge Xcode DerivedData?" && [[ -d "$HOME/Library/Developer/Xcode/DerivedData" ]]; then
+        safe_rm_rf "$HOME/Library/Developer/Xcode/DerivedData"/*
+        log_success "Xcode DerivedData cleaned"
     fi
 }
 
@@ -205,16 +229,16 @@ clean_project_caches() {
     log_info "Cleaning development project caches..."
 
     # Find and clean common project directories
-    find "$HOME/dev" -type d -name "node_modules" -exec rm -rf {} + 2>/dev/null || true
-    find "$HOME/dev" -type d -name ".gradle" -exec rm -rf {} + 2>/dev/null || true
-    find "$HOME/dev" -type d -name "build" -exec rm -rf {} + 2>/dev/null || true
-    find "$HOME/dev" -type d -name "target" -exec rm -rf {} + 2>/dev/null || true
-    find "$HOME/dev" -type d -name ".next" -exec rm -rf {} + 2>/dev/null || true
-    find "$HOME/dev" -type d -name ".nuxt" -exec rm -rf {} + 2>/dev/null || true
-    find "$HOME/dev" -type d -name "dist" -exec rm -rf {} + 2>/dev/null || true
-    find "$HOME/dev" -type d -name ".cache" -exec rm -rf {} + 2>/dev/null || true
-
-    log_success "Project caches cleaned"
+    if confirm_action "Delete project build caches (build,target,dist,node_modules, etc.)?"; then
+        for pattern in node_modules .gradle build target .next .nuxt dist .cache; do
+            find "$HOME/dev" -type d -name "$pattern" -prune -print 2>/dev/null | while read -r d; do
+                safe_rm_rf "$d"
+            done
+        done
+        log_success "Project caches cleaned"
+    else
+        log_info "Skipped project caches"
+    fi
 }
 
 # Clean logs

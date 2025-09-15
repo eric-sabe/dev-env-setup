@@ -1,8 +1,14 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Machine Learning Course Setup Script
 # Installs ML tools and frameworks for machine learning courses
 
-set -e  # Exit on any error
+set -Eeuo pipefail  # Stricter error handling
+trap 'echo "[ERROR] setup-ml failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UTIL_DIR="${SCRIPT_DIR%/courses*/}/utils"
+[[ -f "$UTIL_DIR/cross-platform.sh" ]] && source "$UTIL_DIR/cross-platform.sh"
+
+pip_install() { (python3 -m pip install --user "$@" || python -m pip install --user "$@") || true; }
 
 # Colors for output
 RED='\033[0;31m'
@@ -28,33 +34,27 @@ log_error() {
     echo -e "${RED}❌ $1${NC}"
 }
 
-# Detect platform
+# Platform already detected by cross-platform utils
 detect_platform() {
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        if [[ -f /etc/os-release ]]; then
-            . /etc/os-release
-            if [[ "$ID" == "ubuntu" ]] || [[ "$ID" == "debian" ]] || [[ "$ID" == "pop" ]] || [[ "$ID" == "elementary" ]] || [[ "$ID" == "linuxmint" ]]; then
-                PLATFORM="ubuntu"
-            elif [[ "$ID" == "centos" ]] || [[ "$ID" == "rhel" ]] || [[ "$ID" == "fedora" ]]; then
-                PLATFORM="redhat"
-            elif [[ "$ID" == "arch" ]] || [[ "$ID" == "manjaro" ]]; then
-                PLATFORM="arch"
-            else
-                PLATFORM="linux"
-            fi
-        else
-            PLATFORM="linux"
-        fi
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        PLATFORM="macos"
-    elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
-        PLATFORM="windows"
-    else
-        log_error "Unsupported platform: $OSTYPE"
-        exit 1
-    fi
-
+    if [[ -z ${PLATFORM:-} || ${PLATFORM} == "unknown" ]]; then
+        log_error "Unable to detect platform"; exit 1; fi
     log_success "Detected platform: $PLATFORM"
+}
+
+GPU_ENABLED=true
+parse_args() {
+    for arg in "$@"; do
+        case $arg in
+            --no-gpu) GPU_ENABLED=false ;;
+            --help|-h)
+                cat <<EOF
+Machine Learning Course Setup
+Usage: $0 [--no-gpu]
+    --no-gpu   Skip GPU / CUDA specific installs even if GPU detected
+EOF
+                exit 0 ;;
+        esac
+    done
 }
 
 # Check Python
@@ -76,17 +76,17 @@ check_python() {
 install_jupyter() {
     log_info "Installing Jupyter and scientific Python stack..."
 
-    pip install --user jupyter jupyterlab notebook
-    pip install --user numpy scipy matplotlib pandas
-    pip install --user scikit-learn seaborn plotly bokeh
+    pip_install jupyter jupyterlab notebook
+    pip_install numpy scipy matplotlib pandas
+    pip_install scikit-learn seaborn plotly bokeh
 
     # Install Jupyter extensions
-    pip install --user jupyter-contrib-nbextensions
+    pip_install jupyter-contrib-nbextensions
     jupyter contrib nbextension install --user
 
     # Install JupyterLab extensions
-    pip install --user jupyterlab-git
-    pip install --user jupyterlab-drawio
+    pip_install jupyterlab-git
+    pip_install jupyterlab-drawio
 
     log_success "Jupyter and scientific stack installed"
 }
@@ -94,18 +94,16 @@ install_jupyter() {
 # Install TensorFlow
 install_tensorflow() {
     log_info "Installing TensorFlow..."
-
-    # Check if CUDA is available (for GPU support)
-    if command -v nvidia-smi &>/dev/null; then
-        log_info "NVIDIA GPU detected, installing TensorFlow with GPU support"
-        pip install --user tensorflow[and-cuda]
-    else
-        log_info "No NVIDIA GPU detected, installing CPU-only TensorFlow"
-        pip install --user tensorflow-cpu
-    fi
+        if [[ $GPU_ENABLED == true && $(command -v nvidia-smi || true) ]]; then
+            log_info "NVIDIA GPU detected, installing TensorFlow with GPU support"
+            pip_install 'tensorflow[and-cuda]'
+        else
+            log_info "Installing CPU-only TensorFlow"
+            pip_install tensorflow-cpu
+        fi
 
     # Install additional TensorFlow tools
-    pip install --user tensorflow-datasets tensorflow-hub tensorflow-probability
+    pip_install tensorflow-datasets tensorflow-hub tensorflow-probability
 
     log_success "TensorFlow installed"
 }
@@ -113,18 +111,16 @@ install_tensorflow() {
 # Install PyTorch
 install_pytorch() {
     log_info "Installing PyTorch..."
-
-    # Detect CUDA version for GPU support
-    if command -v nvidia-smi &>/dev/null; then
-        log_info "Installing PyTorch with CUDA support"
-        pip install --user torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-    else
-        log_info "Installing PyTorch CPU-only"
-        pip install --user torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-    fi
+        if [[ $GPU_ENABLED == true && $(command -v nvidia-smi || true) ]]; then
+            log_info "Installing PyTorch with CUDA (cu118) support"
+            pip_install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+        else
+            log_info "Installing PyTorch CPU-only"
+            pip_install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+        fi
 
     # Install additional PyTorch tools
-    pip install --user torchtext torchmetrics pytorch-lightning
+    pip_install torchtext torchmetrics pytorch-lightning
 
     log_success "PyTorch installed"
 }
@@ -133,9 +129,9 @@ install_pytorch() {
 install_scikit_learn() {
     log_info "Installing scikit-learn and ML libraries..."
 
-    pip install --user scikit-learn xgboost lightgbm catboost
-    pip install --user imbalanced-learn yellowbrick
-    pip install --user optuna hyperopt
+    pip_install scikit-learn xgboost lightgbm catboost
+    pip_install imbalanced-learn yellowbrick
+    pip_install optuna hyperopt
 
     log_success "scikit-learn and ML libraries installed"
 }
@@ -144,9 +140,9 @@ install_scikit_learn() {
 install_cv_libraries() {
     log_info "Installing computer vision libraries..."
 
-    pip install --user opencv-python opencv-contrib-python
-    pip install --user pillow scikit-image
-    pip install --user albumentations
+    pip_install opencv-python opencv-contrib-python
+    pip_install pillow scikit-image
+    pip_install albumentations
 
     log_success "Computer vision libraries installed"
 }
@@ -155,8 +151,8 @@ install_cv_libraries() {
 install_nlp_libraries() {
     log_info "Installing NLP libraries..."
 
-    pip install --user nltk spacy transformers datasets
-    pip install --user gensim textblob vaderSentiment
+    pip_install nltk spacy transformers datasets
+    pip_install gensim textblob vaderSentiment
 
     # Download NLTK data
     python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); nltk.download('wordnet')"
@@ -171,9 +167,9 @@ install_nlp_libraries() {
 install_visualization() {
     log_info "Installing visualization libraries..."
 
-    pip install --user matplotlib seaborn plotly bokeh
-    pip install --user altair streamlit panel
-    pip install --user plotly dash
+    pip_install matplotlib seaborn plotly bokeh
+    pip_install altair streamlit panel
+    pip_install plotly dash
 
     log_success "Visualization libraries installed"
 }
@@ -182,9 +178,9 @@ install_visualization() {
 install_ml_tools() {
     log_info "Installing additional ML tools..."
 
-    pip install --user mlflow dvc kedro
-    pip install --user wandb comet-ml
-    pip install --user joblib pickle5
+    pip_install mlflow dvc kedro
+    pip_install wandb comet-ml
+    pip_install joblib pickle5
 
     log_success "Additional ML tools installed"
 }
@@ -192,8 +188,7 @@ install_ml_tools() {
 # Install GPU support (if available)
 install_gpu_support() {
     log_info "Checking for GPU support..."
-
-    if command -v nvidia-smi &>/dev/null; then
+    if [[ $GPU_ENABLED == true && $(command -v nvidia-smi || true) ]]; then
         log_info "NVIDIA GPU detected"
 
         # Install CUDA toolkit if not present
@@ -224,7 +219,7 @@ install_gpu_support() {
 
         log_success "GPU support configured"
     else
-        log_info "No NVIDIA GPU detected, skipping GPU setup"
+        log_info "GPU support disabled (either --no-gpu specified or no GPU detected)"
     fi
 }
 

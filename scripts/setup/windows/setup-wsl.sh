@@ -1,32 +1,21 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # WSL2 Ubuntu Development Environment Setup Script
 # Comprehensive setup for CS students - WSL2 Ubuntu 20.04+
 
-set -e  # Exit on any error
+set -Eeuo pipefail
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Source shared utilities
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+UTILS_DIR="${SCRIPT_DIR%/setup/windows}/utils"
+if [[ -f "$UTILS_DIR/cross-platform.sh" ]]; then
+    # shellcheck source=../../utils/cross-platform.sh
+    source "$UTILS_DIR/cross-platform.sh"
+else
+    echo "[WARN] cross-platform utilities not found; proceeding with minimal safety" >&2
+fi
 
-# Logging functions
-log_info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
-}
-
-log_success() {
-    echo -e "${GREEN}✅ $1${NC}"
-}
-
-log_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
-}
-
-log_error() {
-    echo -e "${RED}❌ $1${NC}"
-}
+log_warning() { log_warn "$@"; }
+trap 'log_error "WSL setup aborted at line $LINENO"' ERR
 
 # Check if running in WSL
 check_wsl() {

@@ -2,7 +2,8 @@
 # Environment Manager Script
 # Comprehensive development environment management tool
 
-set -e  # Exit on any error
+set -Eeuo pipefail  # Exit on error, unset var error, pipefail
+trap 'echo "[ERROR] Env manager failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
 
 # Colors for output
 RED='\033[0;31m'

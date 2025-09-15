@@ -2,7 +2,11 @@
 # Database Systems Course Setup Script
 # Installs database tools and development environment for database courses
 
-set -e  # Exit on any error
+set -Eeuo pipefail  # Exit on error, unset var, pipefail
+trap 'echo "[ERROR] setup-database failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UTIL_DIR="${SCRIPT_DIR%/courses*/}/utils"
+[[ -f "$UTIL_DIR/cross-platform.sh" ]] && source "$UTIL_DIR/cross-platform.sh"
 
 # Colors for output
 RED='\033[0;31m'
@@ -137,6 +141,61 @@ install_mysql() {
     log_success "MySQL/MariaDB installed"
 }
 
+# Optional MySQL secure installation (interactive guidance or automated)
+mysql_secure_hardening() {
+        if ! command -v mysql &>/dev/null; then
+                log_warning "MySQL client not found; skipping hardening"
+                return
+        fi
+
+        echo ""
+        log_info "MySQL hardening options:"
+        echo "1) Interactive (run mysql_secure_installation)"
+        echo "2) Automated (set root password, remove test DB, disable remote root)"
+        echo "3) Skip"
+        read -r -p "Choose hardening option [3]: " hard_opt
+        hard_opt=${hard_opt:-3}
+
+        case $hard_opt in
+            1)
+                if command -v mysql_secure_installation &>/dev/null; then
+                    log_info "Launching mysql_secure_installation..."
+                    mysql_secure_installation || log_warning "mysql_secure_installation exited with non-zero status"
+                else
+                    log_warning "mysql_secure_installation utility not available on this platform"
+                fi
+                ;;
+            2)
+                read -r -s -p "Enter desired MySQL root password: " MYSQL_ROOT_PW; echo
+                [[ -z $MYSQL_ROOT_PW ]] && { log_error "Empty password provided; aborting automated hardening"; return; }
+                # Attempt passwordless root auth first; fallback to sudo
+                if mysql -u root -e 'SELECT 1;' 2>/dev/null; then
+                    AUTH_CMD="mysql -u root"
+                elif sudo mysql -u root -e 'SELECT 1;' 2>/dev/null; then
+                    AUTH_CMD="sudo mysql -u root"
+                else
+                    log_error "Unable to authenticate as root for automated hardening"; return 1
+                fi
+                log_info "Applying automated secure configuration..."
+                $AUTH_CMD <<EOF || log_warning "Some hardening statements may have failed"
+ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '${MYSQL_ROOT_PW}';
+DELETE FROM mysql.user WHERE User='';
+DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost');
+DROP DATABASE IF EXISTS test;
+DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+FLUSH PRIVILEGES;
+EOF
+                log_success "Automated MySQL hardening applied"
+                ;;
+            3)
+                log_info "Skipping MySQL hardening (can run later with mysql_secure_installation)"
+                ;;
+            *)
+                log_warning "Unknown option; skipping MySQL hardening"
+                ;;
+        esac
+}
+
 # Install MongoDB
 install_mongodb() {
     log_info "Installing MongoDB..."
@@ -211,7 +270,7 @@ install_client_tools() {
     log_info "Installing database client tools..."
 
     # Install Python packages for database access
-    pip install --user psycopg2-binary pymysql pymongo redis
+    (python3 -m pip install --user psycopg2-binary pymysql pymongo redis || python -m pip install --user psycopg2-binary pymysql pymongo redis) || true
 
     # Install command-line clients
     case $PLATFORM in
@@ -220,18 +279,18 @@ install_client_tools() {
             ;;
         ubuntu)
             sudo apt install -y postgresql-client mysql-client redis-tools
-            pip install --user pgcli mycli
+            (python3 -m pip install --user pgcli mycli || python -m pip install --user pgcli mycli) || true
             ;;
         redhat)
             sudo yum install -y postgresql mysql redis
-            pip install --user pgcli mycli
+            (python3 -m pip install --user pgcli mycli || python -m pip install --user pgcli mycli) || true
             ;;
         arch)
             sudo pacman -S --noconfirm postgresql mysql redis
-            pip install --user pgcli mycli
+            (python3 -m pip install --user pgcli mycli || python -m pip install --user pgcli mycli) || true
             ;;
         windows)
-            pip install --user pgcli mycli
+            (python3 -m pip install --user pgcli mycli || python -m pip install --user pgcli mycli) || true
             ;;
     esac
 
@@ -596,6 +655,7 @@ main() {
 
     install_postgresql
     install_mysql
+    mysql_secure_hardening
     install_mongodb
     install_redis
     install_client_tools

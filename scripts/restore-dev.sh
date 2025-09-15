@@ -2,7 +2,11 @@
 # Development Environment Restore Script
 # Restores development environments from backups
 
-set -e  # Exit on any error
+set -Eeuo pipefail  # Stricter error handling
+trap 'echo "[ERROR] Restore failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UTIL_DIR="${SCRIPT_DIR}/utils"
+[[ -f "$UTIL_DIR/cross-platform.sh" ]] && source "$UTIL_DIR/cross-platform.sh"
 
 # Colors for output
 RED='\033[0;31m'
@@ -290,12 +294,27 @@ restore_packages() {
         log_success "Python packages installed"
     fi
 
-    # Restore Node.js packages
-    if [[ -f "$packages_dir/npm_packages.txt" ]] && command -v npm &>/dev/null; then
-        log_info "Installing npm packages..."
-        # This is tricky as we need to parse the global packages
-        grep -E "^├── |└── " "$packages_dir/npm_packages.txt" | sed 's/├── //' | sed 's/└── //' | xargs npm install -g
-        log_success "npm packages installed"
+    # Restore Node.js global packages (prefer JSON if available)
+    if command -v npm &>/dev/null; then
+        if [[ -f "$packages_dir/npm_packages.json" ]]; then
+            log_info "Restoring npm packages from JSON..."
+            if command -v jq &>/dev/null; then
+                mapfile -t _npm_pkgs < <(jq -r '.dependencies | keys[]' "$packages_dir/npm_packages.json" 2>/dev/null || echo "")
+                if [[ ${#_npm_pkgs[@]} -gt 0 ]]; then
+                    npm install -g "${_npm_pkgs[@]}" || true
+                    log_success "npm packages restored (JSON)"
+                else
+                    log_warning "No dependencies found in npm_packages.json"
+                fi
+            else
+                log_warning "jq not installed; falling back to text parse if available"
+            fi
+        fi
+        if [[ -f "$packages_dir/npm_packages.txt" ]]; then
+            log_info "Restoring npm packages from tree listing..."
+            grep -E "^├── |└── " "$packages_dir/npm_packages.txt" | sed 's/├── //' | sed 's/└── //' | awk -F@ '{print $1}' | xargs -r npm install -g || true
+            log_success "npm packages restored (tree)"
+        fi
     fi
 
     # Restore Ruby gems

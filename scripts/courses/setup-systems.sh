@@ -2,7 +2,12 @@
 # Systems Programming Course Setup Script
 # Installs systems programming tools and development environment
 
-set -e  # Exit on any error
+set -Eeuo pipefail  # Exit on any error, unset var error, pipefail
+trap 'echo "[ERROR] setup-systems failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UTIL_DIR="${SCRIPT_DIR%/courses*/}/utils"
+[[ -f "$UTIL_DIR/cross-platform.sh" ]] && source "$UTIL_DIR/cross-platform.sh"
+pip_install() { (python3 -m pip install --user "$@" || python -m pip install --user "$@") || true; }
 
 # Colors for output
 RED='\033[0;31m'
@@ -252,7 +257,7 @@ install_dev_tools() {
     log_info "Installing additional development tools..."
 
     # Install Python for scripting and testing
-    pip install --user pytest gdbgui
+    pip_install pytest gdbgui
 
     # Install additional utilities
     case $PLATFORM in

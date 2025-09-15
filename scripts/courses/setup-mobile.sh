@@ -1,60 +1,32 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Mobile Development Course Setup Script
 # Installs mobile development tools and frameworks
 
-set -e  # Exit on any error
+set -Eeuo pipefail
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Source shared utilities (logging, platform detection, helpers)
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+UTILS_DIR="${SCRIPT_DIR%/courses/*}/utils"
+if [[ -f "$UTILS_DIR/cross-platform.sh" ]]; then
+  # shellcheck source=../../utils/cross-platform.sh
+  source "$UTILS_DIR/cross-platform.sh"
+else
+  echo "[WARN] cross-platform utilities not found; proceeding without shared helpers" >&2
+fi
 
-# Logging functions
-log_info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
-}
+# Backwards compatibility alias (script previously used log_warning)
+log_warning() { log_warn "$@"; }
 
-log_success() {
-    echo -e "${GREEN}✅ $1${NC}"
-}
-
-log_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
-}
-
-log_error() {
-    echo -e "${RED}❌ $1${NC}"
-}
+trap 'log_error "Mobile setup aborted at line $LINENO"' ERR
 
 # Detect platform
+# Platform is already detected by cross-platform.sh (PLATFORM variable)
 detect_platform() {
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        if [[ -f /etc/os-release ]]; then
-            . /etc/os-release
-            if [[ "$ID" == "ubuntu" ]] || [[ "$ID" == "debian" ]] || [[ "$ID" == "pop" ]] || [[ "$ID" == "elementary" ]] || [[ "$ID" == "linuxmint" ]]; then
-                PLATFORM="ubuntu"
-            elif [[ "$ID" == "centos" ]] || [[ "$ID" == "rhel" ]] || [[ "$ID" == "fedora" ]]; then
-                PLATFORM="redhat"
-            elif [[ "$ID" == "arch" ]] || [[ "$ID" == "manjaro" ]]; then
-                PLATFORM="arch"
-            else
-                PLATFORM="linux"
-            fi
-        else
-            PLATFORM="linux"
-        fi
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        PLATFORM="macos"
-    elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
-        PLATFORM="windows"
-    else
-        log_error "Unsupported platform: $OSTYPE"
-        exit 1
-    fi
-
-    log_success "Detected platform: $PLATFORM"
+  if [[ -z "${PLATFORM:-}" || "${PLATFORM}" == "unknown" ]]; then
+    log_error "Unable to detect platform automatically. Aborting."
+    exit 1
+  fi
+  log_success "Detected platform: $PLATFORM"
 }
 
 # Install Android development tools

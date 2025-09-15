@@ -2,7 +2,11 @@
 # Development Environment Backup Script
 # Backs up development environments and projects
 
-set -e  # Exit on any error
+set -Eeuo pipefail  # Stricter error handling
+trap 'echo "[ERROR] Backup failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UTIL_DIR="${SCRIPT_DIR}/utils"
+[[ -f "$UTIL_DIR/cross-platform.sh" ]] && source "$UTIL_DIR/cross-platform.sh"
 
 # Colors for output
 RED='\033[0;31m'
@@ -194,9 +198,11 @@ backup_packages() {
             ;;
         redhat)
             # yum/dnf packages
-            if command -v rpm &>/dev/null; then
-                rpm -qa > "$packages_dir/rpm_packages.txt"
-                log_success "RPM packages backed up"
+            if command -v npm &>/dev/null; then
+                npm list -g --depth=0 > "$packages_dir/npm_packages.txt" 2>/dev/null || true
+                # Also export JSON for robust parsing during restore
+                npm ls -g --depth=0 --json > "$packages_dir/npm_packages.json" 2>/dev/null || true
+            fi
             fi
             ;;
         arch)
