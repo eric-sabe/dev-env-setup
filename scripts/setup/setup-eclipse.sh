@@ -1,32 +1,32 @@
-#!/bin/bash
-# Eclipse Setup Script
-# Installs and configures Eclipse IDE for Java and C++ development
+#!/usr/bin/env bash
+# Eclipse Setup Script (refactored for consistency & safety)
+# Installs and configures Eclipse IDE for Java and C++ development using shared utils.
 
-set -e  # Exit on any error
+set -Eeuo pipefail
+trap 'echo "[ERROR] eclipse setup failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UTIL_DIR="${SCRIPT_DIR%/scripts/setup*}/scripts/utils"
+if [[ -f "$UTIL_DIR/cross-platform.sh" ]]; then
+    # shellcheck source=../utils/cross-platform.sh
+    source "$UTIL_DIR/cross-platform.sh"
+fi
+if [[ -f "$UTIL_DIR/version-resolver.sh" ]]; then
+    # shellcheck source=../utils/version-resolver.sh
+    source "$UTIL_DIR/version-resolver.sh"
+fi
 
-# Logging functions
-log_info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
-}
+ECLIPSE_VERSION_Y="2023-12" # TODO: move to manifest sources block in Phase 3
+ECLIPSE_RELEASE="R"         # channel release marker
 
-log_success() {
-    echo -e "${GREEN}✅ $1${NC}"
-}
-
-log_warning() {
- echo -e "${YELLOW}⚠️  $1${NC}"
-}
-
-log_error() {
-    echo -e "${RED}❌ $1${NC}"
-}
+# Use shared logging if available; otherwise define minimal fallbacks
+if ! command -v log_info >/dev/null 2>&1; then
+    RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+    log_info(){ echo -e "${BLUE}ℹ️  $1${NC}"; }
+    log_success(){ echo -e "${GREEN}✅ $1${NC}"; }
+    log_warning(){ echo -e "${YELLOW}⚠️  $1${NC}"; }
+    log_error(){ echo -e "${RED}❌ $1${NC}"; }
+fi
 
 # Detect platform
 detect_platform() {
@@ -97,7 +97,7 @@ install_eclipse() {
     local eclipse_type=$1
     local install_dir="$HOME/dev/tools/eclipse"
 
-    log_info "Installing Eclipse $eclipse_type..."
+    log_info "Installing Eclipse $eclipse_type (version $ECLIPSE_VERSION_Y) ..."
 
     # Create installation directory
     mkdir -p "$install_dir"
@@ -147,8 +147,14 @@ install_eclipse() {
         archive_name="eclipse-${eclipse_type}.tar.gz"
     fi
 
+    if [[ -d "$install_dir/eclipse" ]]; then
+        log_warning "Existing eclipse directory found – skipping re-download"
+        create_shortcut "$install_dir" "$eclipse_type"
+        return 0
+    fi
+
     log_info "Downloading Eclipse from $download_url"
-    if ! curl -L -o "$install_dir/$archive_name" "$download_url"; then
+    if ! curl -fsSL -o "$install_dir/$archive_name" "$download_url"; then
         log_error "Failed to download Eclipse"
         exit 1
     fi
@@ -179,7 +185,7 @@ install_eclipse() {
     esac
 
     # Clean up archive
-    rm "$archive_name"
+    rm -f "$archive_name"
 
     # Create desktop shortcut/symlink
     create_shortcut "$install_dir" "$eclipse_type"
@@ -410,8 +416,7 @@ EOF
 main() {
     local eclipse_type=${1:-java}
 
-    echo -e "${BLUE}🚀 Setting up Eclipse ${eclipse_type^^}${NC}"
-    echo -e "${BLUE}=================================${NC}"
+    log_info "🚀 Setting up Eclipse ${eclipse_type^^}"
 
     detect_platform
     check_prerequisites "$eclipse_type"
@@ -422,9 +427,9 @@ main() {
     create_documentation "$eclipse_type"
 
     echo ""
-    echo -e "${GREEN}🎉 Eclipse ${eclipse_type^^} setup complete!${NC}"
+    log_success "Eclipse ${eclipse_type^^} setup complete!"
     echo ""
-    echo -e "${YELLOW}Next steps:${NC}"
+    log_info "Next steps:"
     echo "1. Start Eclipse using the desktop shortcut or run script"
     echo "2. Select workspace: ~/dev/current/$eclipse_type"
     echo "3. Complete the welcome wizard"
@@ -435,18 +440,9 @@ main() {
 }
 
 # Show usage if no arguments
-if [[ $# -eq 0 ]]; then
-    echo "Usage: $0 <type>"
-    echo ""
-    echo "Types:"
-    echo "  java    Install Eclipse for Java development"
-    echo "  cpp     Install Eclipse for C++ development"
-    echo ""
-    echo "Examples:"
-    echo "  $0 java"
-    echo "  $0 cpp"
-    exit 1
+if [[ $# -lt 1 ]]; then
+    echo "Usage: $0 <java|cpp>" >&2
+    exit 64
 fi
 
-# Run main function
 main "$@"

@@ -1,32 +1,30 @@
-#!/bin/bash
-# VS Code Setup Script
-# Installs and configures VS Code with development extensions
+#!/usr/bin/env bash
+# VS Code Setup Script (refactored)
+# Installs and configures VS Code with development extensions using shared utils.
 
-set -e  # Exit on any error
+set -Eeuo pipefail
+trap 'echo "[ERROR] vscode setup failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UTIL_DIR="${SCRIPT_DIR%/scripts/setup*}/scripts/utils"
+if [[ -f "$UTIL_DIR/cross-platform.sh" ]]; then
+    # shellcheck source=../utils/cross-platform.sh
+    source "$UTIL_DIR/cross-platform.sh"
+fi
+if [[ -f "$UTIL_DIR/version-resolver.sh" ]]; then
+    # shellcheck source=../utils/version-resolver.sh
+    source "$UTIL_DIR/version-resolver.sh"
+fi
 
-# Logging functions
-log_info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
-}
+VSCODE_CHANNEL="stable" # placeholder; future manifest integration
 
-log_success() {
-    echo -e "${GREEN}✅ $1${NC}"
-}
-
-log_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
-}
-
-log_error() {
-    echo -e "${RED}❌ $1${NC}"
-}
+if ! command -v log_info >/dev/null 2>&1; then
+    RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+    log_info(){ echo -e "${BLUE}ℹ️  $1${NC}"; }
+    log_success(){ echo -e "${GREEN}✅ $1${NC}"; }
+    log_warning(){ echo -e "${YELLOW}⚠️  $1${NC}"; }
+    log_error(){ echo -e "${RED}❌ $1${NC}"; }
+fi
 
 # Detect platform
 detect_platform() {
@@ -69,7 +67,7 @@ check_vscode() {
 
 # Install VS Code
 install_vscode() {
-    log_info "Installing VS Code..."
+    log_info "Installing VS Code (channel: $VSCODE_CHANNEL)..."
 
     case $PLATFORM in
         macos)
@@ -115,7 +113,7 @@ install_vscode() {
 
 # Install VS Code extensions
 install_extensions() {
-    log_info "Installing VS Code extensions..."
+    log_info "Installing VS Code extensions (idempotent)..."
 
     # Core extensions
     local extensions=(
@@ -181,8 +179,12 @@ install_extensions() {
     local failed_extensions=()
 
     for extension in "${extensions[@]}"; do
+        if code --list-extensions | grep -iq "^${extension}$"; then
+            log_info "Already present: $extension"
+            continue
+        fi
         log_info "Installing extension: $extension"
-        if code --install-extension "$extension" --force; then
+        if code --install-extension "$extension" --force >/dev/null 2>&1; then
             log_success "Installed: $extension"
         else
             log_warning "Failed to install: $extension"
@@ -458,8 +460,7 @@ EOF
 
 # Main function
 main() {
-    echo -e "${BLUE}🚀 Setting up VS Code${NC}"
-    echo -e "${BLUE}====================${NC}"
+    log_info "🚀 Setting up VS Code"
 
     detect_platform
 
@@ -473,9 +474,9 @@ main() {
     create_workspace_template
 
     echo ""
-    echo -e "${GREEN}🎉 VS Code setup complete!${NC}"
+    log_success "VS Code setup complete!"
     echo ""
-    echo -e "${YELLOW}Next steps:${NC}"
+    log_info "Next steps:"
     echo "1. Restart VS Code to apply all settings"
     echo "2. Check that all extensions are installed and working"
     echo "3. For new projects, copy settings from ~/dev/tools/vscode-templates/"

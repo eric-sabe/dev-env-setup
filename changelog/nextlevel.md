@@ -290,4 +290,6 @@ Progress snapshots appended here with timestamped mini-sections as work proceeds
 [2025-09-15T02:15Z] Refactored webdev & database scripts to resolver-driven pip installs (web/db groups).
 [2025-09-15T02:25Z] Mobile script updated to manifest-driven global installs for RN/Expo/Appium/Detox.
 [2025-09-15T02:30Z] Pin audit refined to whitelist new resolver patterns; docs matrix regenerated.
+[2025-09-15T02:40Z] Refactored setup-eclipse with shared utils, safety flags, idempotent download.
+[2025-09-15T02:45Z] Refactored setup-vscode with shared utils, idempotent extension installs.
 ```
