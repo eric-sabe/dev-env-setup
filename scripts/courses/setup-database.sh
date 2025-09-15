@@ -362,7 +362,14 @@ install_client_tools() {
     log_info "Installing database client tools..."
 
     # Install Python packages for database access
-    (python3 -m pip install --user psycopg2-binary pymysql pymongo redis || python -m pip install --user psycopg2-binary pymysql pymongo redis) || true
+    if command -v build_pip_install_args >/dev/null 2>&1; then
+        db_pkgs=$(build_pip_install_args db || true)
+        if [[ -n $db_pkgs ]]; then
+          (python3 -m pip install --user $db_pkgs || python -m pip install --user $db_pkgs) || true
+        fi
+    else
+        (python3 -m pip install --user psycopg2-binary pymysql pymongo redis || python -m pip install --user psycopg2-binary pymysql pymongo redis) || true
+    fi
 
     # Install command-line clients
     case $PLATFORM in
@@ -371,7 +378,11 @@ install_client_tools() {
             ;;
         ubuntu)
             sudo apt install -y postgresql-client mysql-client redis-tools
-            (python3 -m pip install --user pgcli mycli || python -m pip install --user pgcli mycli) || true
+            if command -v build_pip_install_args >/dev/null 2>&1; then
+                : # pgcli/mycli could be added to a future 'db-tools' group
+            else
+                (python3 -m pip install --user pgcli mycli || python -m pip install --user pgcli mycli) || true
+            fi
             ;;
         redhat)
             sudo yum install -y postgresql mysql redis

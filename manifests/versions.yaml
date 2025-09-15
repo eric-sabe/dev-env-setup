@@ -31,6 +31,22 @@ python:
       yellowbrick: "1.5.*"
       optuna: "3.6.*"
       hyperopt: "0.2.*"
+    web:
+      django: "5.0.*"
+      djangorestframework: "3.15.*"
+      flask: "3.0.*"
+      fastapi: "0.112.*"
+      uvicorn: "0.30.*"
+      requests: "2.32.*"
+      beautifulsoup4: "4.12.*"
+      selenium: "4.23.*"
+      pytest: "8.3.*"
+    db:
+      psycopg2-binary: "2.9.*"
+      aiosqlite: "0.20.*"
+      pymysql: "1.1.*"
+      pymongo: "4.8.*"
+      redis: "5.0.*"
     viz:
       plotly: "5.22.*"
       bokeh: "3.4.*"
@@ -78,6 +94,9 @@ node:
   appium: "2.11.*"
   appium-doctor: "1.19.*"
   detox-cli: "0.0.*"  # update when stable pin decided
+  @storybook/cli: "8.1.*"
+  react-devtools: "5.0.*"
+  @vue/devtools: "6.6.*"
 
 linux:
   apt:

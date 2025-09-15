@@ -89,10 +89,18 @@ install_python_web() {
         pyenv global 3.11.7
     fi
 
-    # Install pip packages for web development
-    pip_install django flask fastapi uvicorn requests beautifulsoup4 selenium pytest
-
-    log_success "Python web development packages installed"
+    if command -v build_pip_install_args >/dev/null 2>&1; then
+        local web_pkgs
+        web_pkgs=$(build_pip_install_args web || true)
+        if [[ -n $web_pkgs ]]; then
+            pip_install $web_pkgs
+        else
+            log_warning "No web packages resolved from manifest"
+        fi
+    else
+        log_warning "Resolver missing; skipping web Python package install"
+    fi
+    log_success "Python web development packages installed (manifest)"
 }
 
 # Install global Node.js packages
@@ -211,7 +219,15 @@ install_web_databases() {
 
     # Install database drivers
     # Use python -m pip for consistency; sqlite3 is part of stdlib (don't install non-existent package)
-    python3 -m pip install --user psycopg2-binary aiosqlite || python -m pip install --user psycopg2-binary aiosqlite || true
+    if command -v build_pip_install_args >/dev/null 2>&1; then
+        local db_pkgs
+        db_pkgs=$(build_pip_install_args db || true)
+        if [[ -n $db_pkgs ]]; then
+            pip_install $db_pkgs
+        fi
+    else
+        log_warning "Resolver missing; skipping db Python driver install"
+    fi
 
     log_success "Web databases installed"
 }

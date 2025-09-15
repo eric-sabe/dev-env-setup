@@ -118,6 +118,20 @@ See `COVERAGE_MATRIX.md` for feature mapping and `DEFECTS.md` for improvement hi
 | ml | yellowbrick | 1.5.* |
 | ml | optuna | 3.6.* |
 | ml | hyperopt | 0.2.* |
+| web | django | 5.0.* |
+| web | djangorestframework | 3.15.* |
+| web | flask | 3.0.* |
+| web | fastapi | 0.112.* |
+| web | uvicorn | 0.30.* |
+| web | requests | 2.32.* |
+| web | beautifulsoup4 | 4.12.* |
+| web | selenium | 4.23.* |
+| web | pytest | 8.3.* |
+| db | psycopg2-binary | 2.9.* |
+| db | aiosqlite | 0.20.* |
+| db | pymysql | 1.1.* |
+| db | pymongo | 4.8.* |
+| db | redis | 5.0.* |
 | viz | plotly | 5.22.* |
 | viz | bokeh | 3.4.* |
 | viz | altair | 5.2.* |
@@ -154,6 +168,10 @@ See `COVERAGE_MATRIX.md` for feature mapping and `DEFECTS.md` for improvement hi
 | eslint | 8.57.* |
 | prettier | 3.3.* |
 | stylelint | 16.6.* |
+| appium | 2.11.* |
+| appium-doctor | 1.19.* |
+| detox-cli | 0.0.* # update when stable pin decided |
+| react-devtools | 5.0.* |
 
 ### Profiles
 

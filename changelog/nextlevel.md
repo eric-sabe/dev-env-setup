@@ -286,4 +286,8 @@ Progress snapshots appended here with timestamped mini-sections as work proceeds
 [2025-09-15T01:10Z] Web development script refactored to manifest-driven global installs (removed ad-hoc extras loop).
 [2025-09-15T01:25Z] Documentation generator script created (generate-docs.sh) and README markers inserted.
 [2025-09-15T01:35Z] Pin audit script updated to tolerate resolver-driven variable installs; initial clean pass.
+[2025-09-15T02:05Z] Added python web/db groups + mobile/web devtool node globals to manifest.
+[2025-09-15T02:15Z] Refactored webdev & database scripts to resolver-driven pip installs (web/db groups).
+[2025-09-15T02:25Z] Mobile script updated to manifest-driven global installs for RN/Expo/Appium/Detox.
+[2025-09-15T02:30Z] Pin audit refined to whitelist new resolver patterns; docs matrix regenerated.
 ```

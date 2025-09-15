@@ -24,7 +24,7 @@ scan_file() {
       *pip*install* )
         # Allow pip install lines that install variable expansions derived from resolver (contain build_pip_install_args or manifest_pip_group usage earlier)
         if echo "$line" | grep -qE 'pip (install|install --user)'; then
-          if echo "$line" | grep -q '\$core_pkgs\|\$viz_pkgs\|manifest_pip_group' >/dev/null 2>&1; then :; 
+          if echo "$line" | grep -q '\$core_pkgs\|\$viz_pkgs\|manifest_pip_group\|build_pip_install_args\|\$web_pkgs\|\$db_pkgs' >/dev/null 2>&1; then :; 
           elif ! echo "$line" | grep -q '=='; then
             echo "[UNPINNED] $rel: $line" >&2; FAIL=1
           fi
