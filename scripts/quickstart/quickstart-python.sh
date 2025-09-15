@@ -74,6 +74,14 @@ get_project_info() {
     read -p "Choose project type [1]: " PROJECT_TYPE
     PROJECT_TYPE=${PROJECT_TYPE:-1}
 
+    # Modern build system option
+    read -p "Use pyproject.toml only (skip legacy setup.py)? (Y/n): " USE_PYPROJECT_ONLY
+    if [[ $USE_PYPROJECT_ONLY =~ ^[Nn]$ ]]; then
+        USE_PYPROJECT_ONLY=false
+    else
+        USE_PYPROJECT_ONLY=true
+    fi
+
     # Project description
     read -p "Enter project description: " PROJECT_DESC
     PROJECT_DESC=${PROJECT_DESC:-"A Python project"}
@@ -1213,12 +1221,13 @@ EOF
 
 # Create configuration files
 create_config_files() {
-    # setup.py (for packages)
-    if [[ $PROJECT_TYPE -eq 4 ]]; then
-        # Already created in create_library_files
-        :
-    else
-        cat << EOF > setup.py
+    # setup.py (legacy) unless user chose pyproject-only
+    if [[ "$USE_PYPROJECT_ONLY" != "true" ]]; then
+        if [[ $PROJECT_TYPE -eq 4 ]]; then
+            # Already created in create_library_files
+            :
+        else
+            cat << EOF > setup.py
 """
 Setup script for ${PROJECT_NAME}
 """
@@ -1254,9 +1263,10 @@ setup(
     install_requires=[],
 )
 EOF
+        fi
     fi
 
-    # pyproject.toml
+    # pyproject.toml (always generate)
     cat << EOF > pyproject.toml
 [build-system]
 requires = ["setuptools>=45", "wheel"]

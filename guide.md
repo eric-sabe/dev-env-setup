@@ -216,6 +216,24 @@ Installs GDB, Valgrind, QEMU, cross-compilers
 ```
 Installs React Native, Flutter, mobile SDKs
 
+### Post-Install Verification (All Course Scripts)
+
+All course setup scripts now conclude with a standardized verification summary powered by `scripts/utils/verify.sh`.
+
+What gets validated:
+- Databases: services running + ports open (5432, 3306, 27017, 6379) and client commands present
+- ML: Python runtime, pip, core scientific libs, TensorFlow / PyTorch (with GPU capability notes)
+- Web: Node.js toolchain, package managers, framework CLIs (React, Vue, Angular), Django import
+- Systems: Compilers (gcc/clang), build tools (make, cmake, ninja), debuggers (gdb/lldb), valgrind, perf, QEMU, minimal compile smoke test
+- Mobile: Node, React Native CLI, Expo, Flutter, adb, CocoaPods/Xcode (macOS), Appium / Detox
+
+How to interpret results:
+- PASS: Tool or library detected / basic usage succeeded
+- FAIL: Missing critical component—re-run platform setup or install manually
+- WARN: Optional or platform-specific tool unavailable (e.g., Valgrind on macOS)
+
+Rerunning scripts: Safe & idempotent—skips existing installs but re-runs verification so students can confirm fixes.
+
 ## Troubleshooting
 
 ### Common Issues

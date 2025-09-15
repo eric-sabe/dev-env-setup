@@ -7,6 +7,7 @@ trap 'echo "[ERROR] setup-ml failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UTIL_DIR="${SCRIPT_DIR%/courses*/}/utils"
 [[ -f "$UTIL_DIR/cross-platform.sh" ]] && source "$UTIL_DIR/cross-platform.sh"
+[[ -f "$UTIL_DIR/verify.sh" ]] && source "$UTIL_DIR/verify.sh"
 
 pip_install() { (python3 -m pip install --user "$@" || python -m pip install --user "$@") || true; }
 
@@ -747,28 +748,30 @@ EOF
     log_success "Machine learning course structure created at $course_dir"
 }
 
-# Verify installations
-verify_installation() {
-    log_info "Verifying ML installations..."
-
-    local errors=0
-
-    # Check Python packages
-    python_packages=("numpy" "pandas" "matplotlib" "scikit-learn" "jupyter" "tensorflow" "torch")
-    for package in "${python_packages[@]}"; do
-        if python -c "import $package" 2>/dev/null; then
-            log_success "$package: available"
-        else
-            log_error "$package: NOT FOUND"
-            ((errors++))
-        fi
-    done
-
-    if [[ $errors -eq 0 ]]; then
-        log_success "All ML tools verified successfully!"
-    else
-        log_warning "$errors ML tools failed verification."
+run_verification() {
+    log_info "Running post-install verification checks..."
+    verify_command python3 "Python 3 runtime"
+    verify_command pip3 "pip package manager" || verify_command pip "pip package manager"
+    verify_python_import numpy
+    verify_python_import pandas
+    verify_python_import matplotlib
+    verify_python_import sklearn
+    verify_python_import jupyter
+    verify_python_import tensorflow
+    verify_python_import torch
+    # GPU checks (non-fatal)
+    if command -v python3 &>/dev/null; then
+        python3 - <<'EOF' || true
+import torch, json, sys
+print("torch cuda available:", torch.cuda.is_available())
+try:
+    import tensorflow as tf
+    print("tensorflow gpu devices:", tf.config.list_physical_devices('GPU'))
+except Exception as e:
+    print("tensorflow gpu check error:", e)
+EOF
     fi
+    print_verification_summary || log_warning "Some ML components failed verification"
 }
 
 # Main function
@@ -789,7 +792,7 @@ main() {
     install_ml_tools
     install_gpu_support
     create_course_structure
-    verify_installation
+    run_verification
 
     echo ""
     echo -e "${GREEN}🎉 Machine Learning course setup complete!${NC}"

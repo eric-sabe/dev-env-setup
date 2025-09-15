@@ -13,6 +13,10 @@ if [[ -f "$UTILS_DIR/cross-platform.sh" ]]; then
 else
   echo "[WARN] cross-platform utilities not found; proceeding without shared helpers" >&2
 fi
+if [[ -f "$UTILS_DIR/verify.sh" ]]; then
+  # shellcheck source=../../utils/verify.sh
+  source "$UTILS_DIR/verify.sh"
+fi
 
 # Backwards compatibility alias (script previously used log_warning)
 log_warning() { log_warn "$@"; }
@@ -917,60 +921,28 @@ EOF
     log_success "Mobile development course structure created at $course_dir"
 }
 
-# Verify installations
-verify_installation() {
-    log_info "Verifying mobile development installations..."
-
-    local errors=0
-
-    # Check Node.js and npm
-    for tool in node npm; do
-        if command -v $tool &>/dev/null; then
-            log_success "$tool: available"
-        else
-            log_error "$tool: NOT FOUND"
-            ((errors++))
-        fi
-    done
-
-    # Check React Native CLI
-    if command -v npx &>/dev/null && npx react-native --version &>/dev/null; then
-        log_success "React Native CLI: available"
-    else
-        log_error "React Native CLI: NOT FOUND"
-        ((errors++))
+run_verification() {
+    log_info "Running post-install verification checks..."
+    verify_command node "Node.js runtime"
+    verify_command npm "npm package manager"
+    verify_command npx "npx runner" || true
+    verify_node_package @react-native-community/cli || true
+    # react-native version (non-fatal)
+    if command -v npx &>/dev/null; then
+      npx react-native --version >/dev/null 2>&1 && log_success "React Native CLI responsive" || log_warning "React Native CLI not responding"
     fi
-
-    # Check Flutter
-    if command -v flutter &>/dev/null; then
-        log_success "Flutter: available"
-    else
-        log_error "Flutter: NOT FOUND"
-        ((errors++))
-    fi
-
-    # Check Android tools
-    if command -v adb &>/dev/null; then
-        log_success "Android Debug Bridge: available"
-    else
-        log_warning "Android Debug Bridge: NOT FOUND (install Android SDK)"
-    fi
-
-    # Check iOS tools (macOS only)
+    verify_node_package @expo/cli || true
+    verify_command flutter "Flutter SDK" || true
+    verify_command adb "Android Debug Bridge" || true
+    verify_command appium "Appium testing" || true
+    verify_node_package detox-cli || true
     if [[ "$PLATFORM" == "macos" ]]; then
-        if xcode-select -p &>/dev/null; then
-            log_success "Xcode Command Line Tools: available"
-        else
-            log_error "Xcode Command Line Tools: NOT FOUND"
-            ((errors++))
-        fi
+      verify_command xcode-select "Xcode command line tools" || true
+      verify_command pod "CocoaPods" || true
     fi
-
-    if [[ $errors -eq 0 ]]; then
-        log_success "All mobile development tools verified successfully!"
-    else
-        log_warning "$errors mobile development tools failed verification."
-    fi
+    # Flutter doctor (non-fatal)
+    command -v flutter &>/dev/null && flutter doctor -v >/dev/null 2>&1 && log_success "Flutter doctor passed" || true
+    print_verification_summary || log_warning "Some mobile development components failed verification"
 }
 
 # Main function
@@ -987,7 +959,7 @@ main() {
     install_testing_tools
     install_mobile_utils
     create_course_structure
-    verify_installation
+  run_verification
 
     echo ""
     echo -e "${GREEN}🎉 Mobile Development course setup complete!${NC}"

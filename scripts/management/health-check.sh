@@ -2,8 +2,25 @@
 # System Health Check Script
 # Comprehensive development environment diagnostic tool
 
-set -Eeuo pipefail  # Stricter error handling
+set -Eeuo pipefail  # Stricter error handling (will relax inside sections)
 trap 'echo "[ERROR] Health check aborted at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
+
+FAIL_COUNT=0
+SECTION_ERRORS=()
+
+run_section() {
+    local name="$1"; shift
+    # Run a section capturing errors but not aborting full script
+    set +e
+    ( set -e; "$@" )
+    local rc=$?
+    set -e
+    if [[ $rc -ne 0 ]]; then
+        FAIL_COUNT=$((FAIL_COUNT+1))
+        SECTION_ERRORS+=("$name (exit $rc)")
+        log_warning "Section '$name' reported errors (continuing)."
+    fi
+}
 
 # Colors for output
 RED='\033[0;31m'
@@ -460,14 +477,18 @@ show_menu() {
 
 # Quick check - run all checks
 quick_check() {
-    check_system_resources
-    check_development_tools
-    check_environment_config
-    check_network
-    check_security
+    run_section "system_resources" check_system_resources
+    run_section "development_tools" check_development_tools
+    run_section "environment_config" check_environment_config
+    run_section "network" check_network
+    run_section "security" check_security
 
     echo ""
-    log_success "Health check completed!"
+    if [[ $FAIL_COUNT -gt 0 ]]; then
+        log_warning "Quick health check completed with $FAIL_COUNT section error(s)."
+    else
+        log_success "Health check completed!"
+    fi
     echo ""
     read -p "Generate detailed report? (y/N): " generate
     if [[ $generate =~ ^[Yy]$ ]]; then
@@ -488,22 +509,22 @@ main() {
 
             case $choice in
                 1)
-                    check_system_resources
+                    run_section "system_resources" check_system_resources
                     ;;
                 2)
-                    check_development_tools
+                    run_section "development_tools" check_development_tools
                     ;;
                 3)
-                    check_environment_config
+                    run_section "environment_config" check_environment_config
                     ;;
                 4)
-                    check_network
+                    run_section "network" check_network
                     ;;
                 5)
-                    check_security
+                    run_section "security" check_security
                     ;;
                 6)
-                    generate_report
+                    run_section "generate_report" generate_report
                     ;;
                 7)
                     quick_check
@@ -520,6 +541,9 @@ main() {
 
             if [[ $choice != "7" && $choice != "0" ]]; then
                 echo ""
+                if [[ $FAIL_COUNT -gt 0 ]]; then
+                    log_warning "Current session accumulated $FAIL_COUNT error section(s): ${SECTION_ERRORS[*]}"
+                fi
                 read -p "Press Enter to continue..."
             fi
         done
@@ -530,22 +554,22 @@ main() {
                 quick_check
                 ;;
             --resources)
-                check_system_resources
+                run_section "system_resources" check_system_resources
                 ;;
             --tools)
-                check_development_tools
+                run_section "development_tools" check_development_tools
                 ;;
             --config)
-                check_environment_config
+                run_section "environment_config" check_environment_config
                 ;;
             --network)
-                check_network
+                run_section "network" check_network
                 ;;
             --security)
-                check_security
+                run_section "security" check_security
                 ;;
             --report)
-                generate_report
+                run_section "generate_report" generate_report
                 ;;
             --help)
                 echo "Usage: $0 [OPTION]"
@@ -568,6 +592,10 @@ main() {
                 exit 1
                 ;;
         esac
+        if [[ $FAIL_COUNT -gt 0 ]]; then
+            log_warning "Completed with $FAIL_COUNT section error(s): ${SECTION_ERRORS[*]}"
+            exit 1
+        fi
     fi
 }
 

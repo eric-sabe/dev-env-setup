@@ -96,7 +96,7 @@ main "$@"
 
 ### Documentation
 - Update README.md for new features
-- Update guide.md for detailed changes
+- Update GUIDE.md for detailed changes
 - Add inline comments for complex logic
 - Include usage examples
 

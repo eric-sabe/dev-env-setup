@@ -29,18 +29,18 @@ Severity: High (H), Medium (M), Low (L)
 | setup-mobile.sh | Flutter install path detection may duplicate installs | L | Check if `flutter` already in PATH. |
 | setup-mobile.sh | iOS tooling placeholders (can't automate) not clearly separated | L | Add explicit notice section. |
 | setup-database.sh | MySQL root operations not secured (no `mysql_secure_installation`) | M | Prompt user to run secure script or implement basic hardening. |
-| setup-database.sh | MongoDB repo pinned single release (jammy) | M | Detect codename dynamically. |
+| setup-database.sh | MongoDB repo pinned single release (jammy) | M | Resolved: dynamic codename w/ fallback + idempotent repo add. |
 | setup-systems.sh | Duplicate `set -e` mid-file (line ~489) | L | Remove duplicate. |
 | env-manager.sh | Uses `jq` without ensuring installed | M | Add check & helpful message. |
 | env-manager.sh | Some functions rely on external managers without guard (pyenv, nvm, sdk) | M | Add fallback messages. |
-| health-check.sh | `set -e` may abort on first failing check reducing report completeness | M | Consider temporarily disabling `-e` within check functions to aggregate failures. |
+| health-check.sh | `set -e` may abort on first failing check reducing report completeness | M | Resolved: section wrapper aggregates failures without early exit. |
 | quickstart-node.sh | Manual JSON manipulation fragile and sed -i differences macOS vs GNU | M | Use `jq` to modify package.json or build JSON into temp file then move. |
 | quickstart-node.sh | No check for required tools (git, npm) early | L | Add preflight. |
-| quickstart-python.sh | Uses legacy `setup.py` only (no pyproject.toml) | L | Optionally modern packaging (add pyproject). |
+| quickstart-python.sh | Uses legacy `setup.py` only (no pyproject.toml) | L | Resolved: pyproject.toml always generated; optional skip of legacy setup.py. |
 | quickstart-python.sh | Potential multiple writes of large here-doc sections (performance minor) | L | Acceptable; no action. |
 | quickstart-cpp.sh | Duplicate `set -e` appears (line ~414) | L | Remove. |
 | All setup scripts | Mixed use of `pip` vs `pip3` | M | Standardize to `python3 -m pip`. |
-| All setup scripts | Lack of idempotency checks (reinstalling packages each run) | L | Optionally test existence before install. |
+| All setup scripts | Lack of idempotency checks (reinstalling packages each run) | L | Partially improved: MongoDB repo skip + archive tarball skip; broader package skip future. |
 
 ## Prioritized Fix List (Phase 1)
 1. Safety & Correctness: strict mode, trap, sqlite3 removal, safer cleanup deletions, add command existence checks.
@@ -65,9 +65,11 @@ Severity: High (H), Medium (M), Low (L)
 - Added MySQL hardening (interactive + automated) function invoked after installation in database setup.
 - Added GPU detection and `--no-gpu` flag plus conditional TensorFlow/PyTorch installs in ML setup.
 - Updated README with Security & GPU sections reflecting new capabilities.
+- Coverage matrix updated to reflect new utility scripts and corrected prior missing entries.
 
-## Pending / Future Opportunities
-- Further idempotency (skip installs if versions already present) could reduce rerun time.
-- Dynamic MongoDB repository codename detection (currently pinned example for Ubuntu jammy).
+## Pending / Future Opportunities (Updated)
+- Extend idempotency: skip large framework installs (e.g., re-run detection for ML stacks, Flutter).
 - Additional shellcheck-driven quote tightening in any newly added scripts.
-- Optional pyproject.toml support in Python quickstart.
+- Per-section JSON output in `diagnose.sh` and richer structured health report export.
+- Plugin-style architecture for course add-ons (reduce monolithic scripts).
+- Automatic detection of Apple Silicon vs Intel for future ML optimizations.

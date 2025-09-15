@@ -7,6 +7,7 @@ trap 'echo "[ERROR] setup-database failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' E
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UTIL_DIR="${SCRIPT_DIR%/courses*/}/utils"
 [[ -f "$UTIL_DIR/cross-platform.sh" ]] && source "$UTIL_DIR/cross-platform.sh"
+[[ -f "$UTIL_DIR/verify.sh" ]] && source "$UTIL_DIR/verify.sh"
 
 # Colors for output
 RED='\033[0;31m'
@@ -207,13 +208,45 @@ install_mongodb() {
             brew services start mongodb-community
             ;;
         ubuntu)
-            # Install MongoDB 7.0
-            curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
-            echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+            # Install MongoDB 7.0 (dynamic codename + idempotent repo add)
+            if ! command -v lsb_release &>/dev/null && [[ -f /etc/lsb-release ]]; then
+                # shellcheck disable=SC1091
+                . /etc/lsb-release || true
+            fi
+            CODENAME=""
+            if command -v lsb_release &>/dev/null; then
+                CODENAME="$(lsb_release -cs 2>/dev/null || true)"
+            fi
+            if [[ -z "$CODENAME" && -f /etc/os-release ]]; then
+                # shellcheck disable=SC1091
+                . /etc/os-release || true
+                CODENAME="${UBUNTU_CODENAME:-${VERSION_CODENAME:-jammy}}"
+            fi
+            # Map some derivative codenames to supported Ubuntu base if needed
+            case "$CODENAME" in
+                focal|jammy|noble) : ;; # supported directly
+                vera|victoria) CODENAME="jammy" ;; # Linux Mint mapping examples
+                *)
+                    log_warning "Unsupported/unknown Ubuntu codename '$CODENAME' for MongoDB repo; defaulting to 'jammy' (may fail)."
+                    CODENAME="jammy"
+                    ;;
+            esac
+            if [[ -f /etc/apt/sources.list.d/mongodb-org-7.0.list ]] && grep -q "mongodb-org/7.0" /etc/apt/sources.list.d/mongodb-org-7.0.list 2>/dev/null; then
+                log_info "MongoDB apt repository already present (codename $(grep -oE 'ubuntu [a-z]+' /etc/apt/sources.list.d/mongodb-org-7.0.list | awk '{print $2}' || echo '?')). Skipping repo add."
+            else
+                curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
+                echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu ${CODENAME}/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+            fi
             sudo apt update
-            sudo apt install -y mongodb-org
-            sudo systemctl enable mongod
-            sudo systemctl start mongod
+            if dpkg -s mongodb-org &>/dev/null; then
+                log_info "mongodb-org already installed; skipping install"
+            else
+                sudo apt install -y mongodb-org || {
+                    log_warning "mongodb-org package failed to install; attempting fallback to 'mongodb' if available"; \
+                    sudo apt install -y mongodb || true; }
+            fi
+            sudo systemctl enable mongod || true
+            sudo systemctl start mongod || true
             ;;
         redhat)
             # MongoDB installation on RHEL/CentOS is complex, skip for now
@@ -263,6 +296,25 @@ install_redis() {
     esac
 
     log_success "Redis installed"
+}
+
+# Run post-install verification
+run_verification() {
+    echo ""
+    log_info "Running post-install verification checks..."
+    verify_command psql "PostgreSQL client"
+    verify_command mysql "MySQL client"
+    verify_command mongod "MongoDB server binary"
+    verify_command redis-server "Redis server binary"
+    verify_service_active postgresql || true
+    verify_service_active mysql || verify_service_active mariadb || true
+    verify_service_active mongod || true
+    verify_service_active redis-server || verify_service_active redis || true
+    verify_port_listening 5432 || true
+    verify_port_listening 3306 || true
+    verify_port_listening 6379 || true
+    verify_port_listening 27017 || true
+    print_verification_summary || log_warning "Some database components failed verification"
 }
 
 # Install database client tools

@@ -48,6 +48,7 @@ A comprehensive collection of scripts to set up and manage development environme
 - **Health Checks**: System diagnostics and monitoring
 - **Backup/Restore**: Complete environment preservation
 - **Cleanup**: Cache and junk file removal
+- **Post-Install Verification**: Every course setup now self-validates installed tools (see Verification section)
 
 ## 🛠️ Key Scripts
 
@@ -60,7 +61,7 @@ A comprehensive collection of scripts to set up and manage development environme
 | `management/env-manager.sh` | Environment management tool |
 | `management/health-check.sh` | System health diagnostics |
 | `courses/setup-database.sh` | Database course setup |
-| `utils/diagnose.sh` | Aggregate diagnostics snapshot |
+| `utils/diagnose.sh` | Aggregate diagnostics snapshot (add `--json` for machine-readable) |
 | `utils/emergency-recovery.sh` | Last-resort recovery helpers |
 | `utils/performance-tune.sh` | Performance snapshot suggestions |
 | `utils/semester-archive.sh` | Archive semester projects |
@@ -71,9 +72,9 @@ A comprehensive collection of scripts to set up and manage development environme
 
 ## 📖 Documentation
 
-- **[Complete Guide](guide.md)**: Detailed setup instructions, troubleshooting, and advanced usage
-- **Platform-specific guides** in the guide
-- **Script documentation** in each script file
+- **[Complete Guide](GUIDE.md)**: Detailed setup instructions, troubleshooting, and advanced usage (renamed from guide.md)
+- Platform-specific guidance consolidated in the Guide
+- Script-level inline documentation within each script
 
 ## 🧰 Utilities Overview
 
@@ -87,13 +88,29 @@ Located in `scripts/utils` unless noted:
 - Cleanup wrappers: `setup/macos/cleanup-mac.sh`, `setup/linux/cleanup-linux.sh`, `setup/windows/cleanup-wsl.sh`.
 - Validation: `scripts/validate.sh` runs shellcheck when available.
 
-See `COVERAGE_MATRIX.md` for feature mapping and `DEFECTS.md` for improvement history.
+See `COVERAGE_MATRIX.md` for feature mapping and `DEFECTS.md` for improvement history. Recent additions: JSON diagnostics output, pyproject-only Python project option, dynamic MongoDB repo detection, idempotent semester archiving, resilient health check aggregation.
+
+## ✅ Post-Install Verification
+
+Each major course setup script (`setup-database.sh`, `setup-ml.sh`, `setup-webdev.sh`, `setup-systems.sh`, `setup-mobile.sh`) now performs a standardized verification pass at the end using `scripts/utils/verify.sh`.
+
+What it checks (context-aware, non-fatal where appropriate):
+- Presence of core commands (compilers, runtimes, CLIs)
+- Python imports for key ML / data / web libraries
+- Node global packages / CLIs for web & mobile frameworks
+- Active services & listening ports for databases (PostgreSQL, MySQL/MariaDB, MongoDB, Redis)
+- Lightweight smoke tests (Node execution, tiny C compile, PyTorch / TensorFlow GPU availability, Flutter doctor)
+
+Summary output reports PASS / FAIL counts at the end of each script. Failures do not always abort; they highlight gaps students can fix immediately.
+
+Run a script again after manual fixes—idempotent guards skip already-installed components while re-verifying.
 
 ## 🔐 Security & Hardening
 
-Recent hardening improvements:
+Recent hardening & quality improvements:
 - Unified strict Bash safety (`set -Eeuo pipefail`) and error traps across scripts.
 - Added optional MySQL secure configuration (interactive or automated) during database course setup.
+- Dynamic MongoDB repository codename detection for Ubuntu & derivatives (fallback safety if unknown).
 - Safer cleanup operations with dry-run and confirmation prompts (`cleanup-dev.sh`).
 - Centralized logging and platform detection via `cross-platform.sh` to reduce divergence.
 
@@ -104,7 +121,7 @@ Recommended manual follow-ups (not automated):
 
 ## 🖥️ GPU / ML Setup
 
-`setup-ml.sh` now auto-detects NVIDIA GPUs (`nvidia-smi`) and installs GPU variants of TensorFlow / PyTorch when present. Use `--no-gpu` to force CPU-only installs:
+`setup-ml.sh` auto-detects NVIDIA GPUs (`nvidia-smi`) and installs GPU variants of TensorFlow / PyTorch when present. Use `--no-gpu` to force CPU-only installs:
 ```
 ./scripts/courses/setup-ml.sh --no-gpu
 ```

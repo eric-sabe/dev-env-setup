@@ -7,6 +7,7 @@ trap 'echo "[ERROR] setup-webdev failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UTIL_DIR="${SCRIPT_DIR%/courses*/}/utils"
 [[ -f "$UTIL_DIR/cross-platform.sh" ]] && source "$UTIL_DIR/cross-platform.sh"
+[[ -f "$UTIL_DIR/verify.sh" ]] && source "$UTIL_DIR/verify.sh"
 pip_install() { (python3 -m pip install --user "$@" || python -m pip install --user "$@") || true; }
 
 # Colors for output
@@ -566,41 +567,24 @@ EOF
     log_success "Web development course structure created at $course_dir"
 }
 
-# Verify installations
-verify_installation() {
-    log_info "Verifying web development installations..."
-
-    local errors=0
-
-    # Check Node.js tools
-    for tool in node npm yarn tsc; do
-        if command -v $tool &>/dev/null; then
-            log_success "$tool: available"
-        else
-            log_error "$tool: NOT FOUND"
-            ((errors++))
-        fi
-    done
-
-    # Check Python web packages
-    if python -c "import django" 2>/dev/null; then
-        log_success "Django: available"
-    else
-        log_warning "Django: NOT FOUND (install with: pip install django)"
+run_verification() {
+    log_info "Running post-install verification checks..."
+    verify_command node "Node.js runtime"
+    verify_command npm "npm package manager"
+    verify_command yarn "Yarn package manager" || true
+    verify_command pnpm "pnpm package manager" || true
+    verify_command tsc "TypeScript compiler" || true
+    verify_command npx "npx runner" || true
+    verify_node_package create-react-app || true
+    verify_node_package @vue/cli || true
+    verify_node_package @angular/cli || true
+    verify_python_import django || true
+    verify_node_package express || true
+    # quick runtime smoke test
+    if command -v node &>/dev/null; then
+        node -e "console.log('node-smoke-ok')" >/dev/null 2>&1 && log_success "Node.js execution test passed" || log_warning "Node.js execution test failed"
     fi
-
-    # Check global npm packages
-    if npm list -g create-react-app 2>/dev/null; then
-        log_success "Create React App: available"
-    else
-        log_warning "Create React App: NOT FOUND"
-    fi
-
-    if [[ $errors -eq 0 ]]; then
-        log_success "All web development tools verified successfully!"
-    else
-        log_warning "$errors web development tools failed verification."
-    fi
+    print_verification_summary || log_warning "Some web dev components failed verification"
 }
 
 # Main function
@@ -620,7 +604,7 @@ main() {
     install_web_databases
     install_browser_tools
     create_course_structure
-    verify_installation
+    run_verification
 
     echo ""
     echo -e "${GREEN}🎉 Web Development course setup complete!${NC}"

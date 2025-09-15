@@ -7,6 +7,7 @@ trap 'echo "[ERROR] setup-systems failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ER
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UTIL_DIR="${SCRIPT_DIR%/courses*/}/utils"
 [[ -f "$UTIL_DIR/cross-platform.sh" ]] && source "$UTIL_DIR/cross-platform.sh"
+[[ -f "$UTIL_DIR/verify.sh" ]] && source "$UTIL_DIR/verify.sh"
 pip_install() { (python3 -m pip install --user "$@" || python -m pip install --user "$@") || true; }
 
 # Colors for output
@@ -823,37 +824,32 @@ EOF
     log_success "Systems programming course structure created at $course_dir"
 }
 
-# Verify installations
-verify_installation() {
-    log_info "Verifying systems programming installations..."
-
-    local errors=0
-
-    # Check compilers
-    for compiler in gcc g++; do
-        if command -v $compiler &>/dev/null; then
-            log_success "$compiler: available"
+run_verification() {
+    log_info "Running post-install verification checks..."
+    verify_command gcc "GCC compiler"
+    verify_command g++ "G++ compiler" || true
+    verify_command clang "Clang compiler" || true
+    verify_command make "Make build tool"
+    verify_command cmake "CMake build system"
+    verify_command ninja "Ninja build system" || true
+    verify_command gdb "GDB debugger" || true
+    verify_command lldb "LLDB debugger" || true
+    verify_command valgrind "Valgrind memory checker" || true
+    verify_command perf "perf profiler" || true
+    verify_command qemu-system-x86_64 "QEMU x86_64" || true
+    verify_command qemu-system-aarch64 "QEMU aarch64" || true
+    # small compile smoke test
+    if command -v gcc &>/dev/null; then
+        tmpdir=$(mktemp -d)
+        echo 'int main(){return 0;}' > "$tmpdir/test.c"
+        if gcc "$tmpdir/test.c" -o "$tmpdir/a.out" 2>/dev/null && "$tmpdir/a.out"; then
+            log_success "GCC compilation smoke test passed"
         else
-            log_error "$compiler: NOT FOUND"
-            ((errors++))
+            log_warning "GCC compilation smoke test failed"
         fi
-    done
-
-    # Check build tools
-    for tool in make cmake gdb; do
-        if command -v $tool &>/dev/null; then
-            log_success "$tool: available"
-        else
-            log_error "$tool: NOT FOUND"
-            ((errors++))
-        fi
-    done
-
-    if [[ $errors -eq 0 ]]; then
-        log_success "All systems programming tools verified successfully!"
-    else
-        log_warning "$errors systems programming tools failed verification."
+        rm -rf "$tmpdir"
     fi
+    print_verification_summary || log_warning "Some systems programming components failed verification"
 }
 
 # Main function
@@ -872,7 +868,7 @@ main() {
     install_qemu
     install_dev_tools
     create_course_structure
-    verify_installation
+    run_verification
 
     echo ""
     echo -e "${GREEN}🎉 Systems Programming course setup complete!${NC}"

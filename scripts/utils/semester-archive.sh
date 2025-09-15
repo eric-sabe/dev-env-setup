@@ -19,8 +19,12 @@ for dir in $SRC_DIRS; do
   if [[ -d $dir ]]; then
     base=$(basename "$dir")
     tarball="$ARCHIVE_DIR/${base}.tar.gz"
-    log_info "Compressing $dir -> $tarball"
-    tar -czf "$tarball" -C "$(dirname "$dir")" "$base"
+    if [[ -f "$tarball" ]]; then
+      log_warning "Tarball already exists, skipping: $tarball"
+    else
+      log_info "Compressing $dir -> $tarball"
+      tar -czf "$tarball" -C "$(dirname "$dir")" "$base"
+    fi
   else
     log_warn "Skip missing directory: $dir"
   fi
