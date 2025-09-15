@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UTIL_DIR="${SCRIPT_DIR%/courses*/}/utils"
 [[ -f "$UTIL_DIR/cross-platform.sh" ]] && source "$UTIL_DIR/cross-platform.sh"
 [[ -f "$UTIL_DIR/verify.sh" ]] && source "$UTIL_DIR/verify.sh"
+[[ -f "$UTIL_DIR/version-resolver.sh" ]] && source "$UTIL_DIR/version-resolver.sh"
 pip_install() { (python3 -m pip install --user "$@" || python -m pip install --user "$@") || true; }
 
 # Colors for output
@@ -173,33 +174,46 @@ install_system_tools() {
 
 # Install build tools and compilers
 install_build_tools() {
-    log_info "Installing build tools and compilers..."
-
-    case $PLATFORM in
-        macos)
-            brew install cmake ninja make autoconf automake
-            brew install gcc llvm
-            ;;
-        ubuntu)
-            sudo apt install -y build-essential cmake ninja-build
-            sudo apt install -y gcc-multilib g++-multilib
-            sudo apt install -y clang llvm lld
-            ;;
-        redhat)
-            sudo yum groupinstall -y "Development Tools"
-            sudo yum install -y cmake ninja-build
-            sudo yum install -y clang llvm
-            ;;
-        arch)
-            sudo pacman -S --noconfirm base-devel cmake ninja
-            sudo pacman -S --noconfirm gcc clang llvm
-            ;;
-        windows)
-            log_info "Build tools should be available in WSL or MSYS2"
-            ;;
-    esac
-
-    log_success "Build tools and compilers installed"
+        log_info "Installing build tools and compilers (manifest aware)..."
+        case $PLATFORM in
+            macos)
+                if command -v list_macos_brew_group >/dev/null 2>&1; then
+                    local base
+                    base=$(list_macos_brew_group base 2>/dev/null || true)
+                    if [[ -n $base ]]; then
+                        # shellcheck disable=SC2086
+                        brew install $base || true
+                    fi
+                fi
+                brew install ninja make autoconf automake || true
+                brew install gcc llvm || true
+                ;;
+            ubuntu)
+                if command -v list_linux_apt_group >/dev/null 2>&1; then
+                    local base
+                    base=$(list_linux_apt_group base 2>/dev/null || true)
+                    if [[ -n $base ]]; then
+                        sudo apt update -y || true
+                        # shellcheck disable=SC2086
+                        sudo apt install -y $base || true
+                    fi
+                fi
+                sudo apt install -y gcc-multilib g++-multilib || true
+                sudo apt install -y clang llvm lld || true
+                ;;
+            redhat)
+                sudo yum groupinstall -y "Development Tools" || true
+                sudo yum install -y cmake ninja-build || true
+                sudo yum install -y clang llvm || true
+                ;;
+            arch)
+                sudo pacman -S --noconfirm base-devel cmake ninja || true
+                sudo pacman -S --noconfirm gcc clang llvm || true
+                ;;
+            windows)
+                log_info "Build tools should be available in WSL or MSYS2" ;;
+        esac
+        log_success "Build tools and compilers installed"
 }
 
 # Install cross-compilation tools

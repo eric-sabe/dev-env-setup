@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UTIL_DIR="${SCRIPT_DIR%/courses*/}/utils"
 [[ -f "$UTIL_DIR/cross-platform.sh" ]] && source "$UTIL_DIR/cross-platform.sh"
 [[ -f "$UTIL_DIR/verify.sh" ]] && source "$UTIL_DIR/verify.sh"
+[[ -f "$UTIL_DIR/version-resolver.sh" ]] && source "$UTIL_DIR/version-resolver.sh"
 
 # Colors for output
 RED='\033[0;31m'
@@ -61,6 +62,45 @@ detect_platform() {
 
     log_success "Detected platform: $PLATFORM"
 }
+
+    # Consolidated manifest-aware bulk install for core DB services (PostgreSQL, MySQL, Redis)
+    install_core_databases_manifest() {
+            if ! command -v list_linux_apt_group >/dev/null 2>&1 && ! command -v list_macos_brew_group >/dev/null 2>&1; then
+                    return 0
+            fi
+            log_info "Attempting manifest-driven core database installation..."
+            case $PLATFORM in
+                macos)
+                    if command -v list_macos_brew_group >/dev/null 2>&1; then
+                        local group
+                            group=$(list_macos_brew_group db 2>/dev/null || true)
+                            if [[ -n $group ]]; then
+                                # shellcheck disable=SC2086
+                                brew install $group || true
+                                for svc in postgresql mysql redis; do brew services start "$svc" 2>/dev/null || true; done
+                                log_success "Manifest core DB install (macOS) complete"
+                                return 0
+                            fi
+                    fi
+                    ;;
+                ubuntu)
+                    if command -v list_linux_apt_group >/dev/null 2>&1; then
+                        local group
+                        group=$(list_linux_apt_group db 2>/dev/null || true)
+                        if [[ -n $group ]]; then
+                            sudo apt update || true
+                            # shellcheck disable=SC2086
+                            sudo apt install -y $group || true
+                            systemctl list-units --type=service 1>/dev/null 2>&1 || true
+                            for svc in postgresql mysql redis-server; do sudo systemctl enable "$svc" 2>/dev/null || true; sudo systemctl start "$svc" 2>/dev/null || true; done
+                            log_success "Manifest core DB install (Linux) complete"
+                            return 0
+                        fi
+                    fi
+                    ;;
+            esac
+            log_warning "Manifest-driven core DB install not applied (group missing); falling back to granular installers"
+    }
 
 # Install PostgreSQL
 install_postgresql() {
@@ -705,6 +745,7 @@ main() {
 
     detect_platform
 
+    install_core_databases_manifest || true
     install_postgresql
     install_mysql
     mysql_secure_hardening

@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UTIL_DIR="${SCRIPT_DIR%/courses*/}/utils"
 [[ -f "$UTIL_DIR/cross-platform.sh" ]] && source "$UTIL_DIR/cross-platform.sh"
 [[ -f "$UTIL_DIR/verify.sh" ]] && source "$UTIL_DIR/verify.sh"
+[[ -f "$UTIL_DIR/version-resolver.sh" ]] && source "$UTIL_DIR/version-resolver.sh"
 pip_install() { (python3 -m pip install --user "$@" || python -m pip install --user "$@") || true; }
 
 # Colors for output
@@ -96,41 +97,36 @@ install_python_web() {
 
 # Install global Node.js packages
 install_nodejs_packages() {
-    log_info "Installing global Node.js packages..."
-
-    # Web development tools
-    npm install -g npm@latest
-    npm install -g yarn pnpm
-    npm install -g typescript @types/node
-    npm install -g nodemon
-    npm install -g concurrently
-    npm install -g http-server
-    npm install -g live-server
-
-    # Testing frameworks
-    npm install -g jest
-    npm install -g cypress
-    npm install -g playwright
-
-    # Build tools
-    npm install -g webpack webpack-cli
-    npm install -g parcel
-    npm install -g vite
-
-    # Linting and formatting
-    npm install -g eslint prettier
-    npm install -g stylelint
-
+    log_info "Installing global Node.js packages (manifest aware)..."
+    local profile="full" # placeholder until profile flag integrated
+    if command -v list_node_globals_profile >/dev/null 2>&1; then
+        local globals
+        globals=$(list_node_globals_profile "$profile" || true)
+        for pkg in $globals; do
+            # Attempt to fetch version pin (Phase 1 manifest stores them as key:value pairs in future iteration)
+            local pinned="$(get_node_global_version "$pkg" || true)"
+            if [[ -n $pinned ]]; then
+                npm install -g "${pkg}@${pinned}" || log_warning "Failed to install ${pkg}@${pinned}"
+            else
+                npm install -g "$pkg" || log_warning "Failed to install $pkg"
+            fi
+        done
+    else
+        log_warning "Resolver missing; skipping global Node.js installs (expected in future phases)"
+    fi
     log_success "Global Node.js packages installed"
 }
 
 # Install React development tools
 install_react_tools() {
     log_info "Installing React development tools..."
-
-    npm install -g create-react-app
-    npm install -g @storybook/cli
-    npm install -g react-devtools
+    # create-react-app already covered by manifest; only install storybook/devtools
+    if get_node_global_version storybook >/dev/null 2>&1; then
+        npm install -g "@storybook/cli@$(get_node_global_version storybook)" || true
+    else
+        npm install -g @storybook/cli || true
+    fi
+    npm install -g react-devtools || true
 
     log_success "React tools installed"
 }
@@ -138,9 +134,8 @@ install_react_tools() {
 # Install Vue.js development tools
 install_vue_tools() {
     log_info "Installing Vue.js development tools..."
-
-    npm install -g @vue/cli
-    npm install -g @vue/devtools
+    # @vue/cli via manifest; devtools only
+    npm install -g @vue/devtools || true
 
     log_success "Vue.js tools installed"
 }
@@ -148,8 +143,7 @@ install_vue_tools() {
 # Install Angular development tools
 install_angular_tools() {
     log_info "Installing Angular development tools..."
-
-    npm install -g @angular/cli
+    # @angular/cli via manifest; nothing extra here for now
 
     log_success "Angular tools installed"
 }

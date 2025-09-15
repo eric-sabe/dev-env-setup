@@ -17,6 +17,10 @@ if [[ -f "$UTILS_DIR/verify.sh" ]]; then
   # shellcheck source=../../utils/verify.sh
   source "$UTILS_DIR/verify.sh"
 fi
+if [[ -f "$UTILS_DIR/version-resolver.sh" ]]; then
+  # shellcheck source=../../utils/version-resolver.sh
+  source "$UTILS_DIR/version-resolver.sh"
+fi
 
 # Backwards compatibility alias (script previously used log_warning)
 log_warning() { log_warn "$@"; }
@@ -111,30 +115,40 @@ install_ios_tools() {
 
 # Install React Native development tools
 install_react_native_tools() {
-    log_info "Installing React Native development tools..."
-
-    # Install Node.js and npm (should already be available from main setup)
+    log_info "Installing React Native development tools (manifest aware)..."
     if ! command -v node &>/dev/null; then
         log_error "Node.js not found. Please run the main setup script first."
         exit 1
     fi
-
-    # Install React Native CLI
-    npm install -g @react-native-community/cli
-
-    # Install Expo CLI
-    npm install -g @expo/cli
-
-    # Install React Native Debugger (optional)
+    local profile="full"
+    if command -v list_node_globals_profile >/dev/null 2>&1; then
+        local globals
+        globals=$(list_node_globals_profile "$profile" || true)
+        for pkg in $globals; do
+            case "$pkg" in
+              @angular/cli|@vue/cli|create-react-app) ;; # skip web frameworks here
+              *)
+                local pinned="$(get_node_global_version "$pkg" || true)"
+                if [[ -n $pinned ]]; then
+                  npm install -g "${pkg}@${pinned}" || log_warning "Failed ${pkg}@${pinned}"
+                else
+                  npm install -g "$pkg" || log_warning "Failed $pkg"
+                fi
+                ;;
+            esac
+        done
+    fi
+    # Explicit mobile-specific CLIs (manifest aware)
+    for tool in @react-native-community/cli @expo/cli; do
+      if version=$(get_node_global_version "$tool" 2>/dev/null); then
+        npm install -g "${tool}@${version}" || log_warning "Failed ${tool}@${version}"
+      else
+        npm install -g "$tool" || log_warning "Failed $tool"
+      fi
+    done
     case $PLATFORM in
-        macos)
-            brew install --cask react-native-debugger
-            ;;
-        ubuntu)
-            # React Native Debugger not available via apt
-            ;;
+      macos) brew install --cask react-native-debugger || true ;;
     esac
-
     log_success "React Native development tools installed"
 }
 
@@ -190,11 +204,13 @@ install_testing_tools() {
     log_info "Installing mobile testing tools..."
 
     # Install Appium for mobile automation testing
-    npm install -g appium
-    npm install -g appium-doctor
-
-    # Install Detox for React Native testing
-    npm install -g detox-cli
+    for tool in appium appium-doctor detox-cli; do
+      if version=$(get_node_global_version "$tool" 2>/dev/null); then
+        npm install -g "${tool}@${version}" || log_warning "Failed ${tool}@${version}"
+      else
+        npm install -g "$tool" || log_warning "Failed $tool"
+      fi
+    done
 
     # Install Flutter testing tools
     if command -v flutter &>/dev/null; then

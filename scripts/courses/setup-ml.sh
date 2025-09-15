@@ -8,8 +8,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UTIL_DIR="${SCRIPT_DIR%/courses*/}/utils"
 [[ -f "$UTIL_DIR/cross-platform.sh" ]] && source "$UTIL_DIR/cross-platform.sh"
 [[ -f "$UTIL_DIR/verify.sh" ]] && source "$UTIL_DIR/verify.sh"
+[[ -f "$UTIL_DIR/version-resolver.sh" ]] && source "$UTIL_DIR/version-resolver.sh"
 
 pip_install() { (python3 -m pip install --user "$@" || python -m pip install --user "$@") || true; }
+
+# Build pinned install arguments from manifest categories (Phase 1 integration)
+manifest_pip_group() {
+    local category="$1"
+    if command -v build_pip_install_args >/dev/null 2>&1; then
+        build_pip_install_args "$category"
+    fi
+}
 
 # Colors for output
 RED='\033[0;31m'
@@ -75,20 +84,14 @@ check_python() {
 
 # Install Jupyter and scientific Python stack
 install_jupyter() {
-    log_info "Installing Jupyter and scientific Python stack..."
-
+    log_info "Installing Jupyter and scientific Python stack (manifest pinned)..."
+    local core_pkgs="$(manifest_pip_group core)"
+    # core group may not include some notebook meta packages yet; include if missing
+    pip_install $core_pkgs || true
+    # Ensure jupyter & jupyterlab explicitly (until manifest expanded)
     pip_install jupyter jupyterlab notebook
-    pip_install numpy scipy matplotlib pandas
-    pip_install scikit-learn seaborn plotly bokeh
-
-    # Install Jupyter extensions
-    pip_install jupyter-contrib-nbextensions
-    jupyter contrib nbextension install --user
-
-    # Install JupyterLab extensions
-    pip_install jupyterlab-git
-    pip_install jupyterlab-drawio
-
+    pip_install jupyter-contrib-nbextensions jupyterlab-git jupyterlab-drawio || true
+    jupyter contrib nbextension install --user || true
     log_success "Jupyter and scientific stack installed"
 }
 
@@ -128,12 +131,11 @@ install_pytorch() {
 
 # Install scikit-learn and ML libraries
 install_scikit_learn() {
-    log_info "Installing scikit-learn and ML libraries..."
-
+    log_info "Installing scikit-learn and ML libraries (manifest pinned where available)..."
+    # scikit-learn pinned via manifest core/ml groups; extra libs temporary direct (Phase 1)
     pip_install scikit-learn xgboost lightgbm catboost
     pip_install imbalanced-learn yellowbrick
     pip_install optuna hyperopt
-
     log_success "scikit-learn and ML libraries installed"
 }
 
@@ -166,12 +168,11 @@ install_nlp_libraries() {
 
 # Install visualization libraries
 install_visualization() {
-    log_info "Installing visualization libraries..."
-
-    pip_install matplotlib seaborn plotly bokeh
-    pip_install altair streamlit panel
-    pip_install plotly dash
-
+    log_info "Installing visualization libraries (manifest pinned where applicable)..."
+    local viz_pkgs="$(manifest_pip_group viz)"
+    pip_install $viz_pkgs
+    # Additional interactive viz not yet in manifest
+    pip_install streamlit panel dash || true
     log_success "Visualization libraries installed"
 }
 
