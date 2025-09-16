@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# validate-sources.sh
+# Purpose: Enforce checksum presence for deterministic, verifiable artifacts.
+# Policy (1.0):
+# - archives: All entries under manifests.archives must have a concrete sha256 (64-hex) and content_length.
+# - sources: Package-manager types (pypi, npm) are informational and exempt; if a source points to a concrete
+#   artifact URL (non package-manager), then a sha256 must be present.
+
 set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 YAML="$ROOT_DIR/manifests/versions.yaml"
@@ -15,28 +22,88 @@ done
 
 [[ -f $YAML ]] || { echo "missing manifest: $YAML" >&2; exit 3; }
 
-# naive parse: look for lines under sources: containing sha256:
-current_section=""
 missing=0
-mapfile -t entries < <(awk '/^sources:/,0 {print}' "$YAML" | grep -E '^( {2,}.+name:| {2,}.+sha256: )')
-name=""
-sha=""
 report=()
-for line in "${entries[@]}"; do
-  if [[ $line =~ name: ]]; then
-    name=$(echo "$line" | sed -E 's/.*name: *"?([^" ]+)"?.*/\1/')
-  elif [[ $line =~ sha256: ]]; then
-    sha=$(echo "$line" | sed -E 's/.*sha256: *([^ #]+).*/\1/')
-    if [[ $sha == "TBD" ]]; then
-      missing=$((missing+1))
-      report+=("$name|missing")
-    else
-      report+=("$name|ok")
-    fi
-    name=""; sha=""
-  fi
-done
 
+# Validate archives block: require sha256 != TBD and content_length present
+while IFS= read -r line; do
+  archives_block+="$line\n"
+done < "$YAML"
+
+archives_lines=$(printf "%b" "$archives_block" | awk '/^archives:/,0')
+current_name=""; have_sha=""; have_len=""
+while IFS= read -r l; do
+  if [[ $l =~ ^[[:space:]]*-[[:space:]]name: ]]; then
+    # evaluate previous
+    if [[ -n $current_name ]]; then
+      if [[ -z $have_sha || $have_sha == "TBD" || -z $have_len ]]; then
+        missing=$((missing+1))
+        report+=("archives:$current_name|missing")
+      else
+        report+=("archives:$current_name|ok")
+      fi
+    fi
+    current_name=$(echo "$l" | sed -E 's/.*name: *([^ #]+)/\1/')
+    have_sha=""; have_len=""
+  elif [[ -n $current_name && $l =~ sha256: ]]; then
+    have_sha=$(echo "$l" | awk '{print $2}')
+  elif [[ -n $current_name && $l =~ content_length: ]]; then
+    have_len=$(echo "$l" | awk '{print $2}')
+  fi
+done < <(printf "%b" "$archives_lines")
+# tail entry
+if [[ -n $current_name ]]; then
+  if [[ -z $have_sha || $have_sha == "TBD" || -z $have_len ]]; then
+    missing=$((missing+1))
+    report+=("archives:$current_name|missing")
+  else
+    report+=("archives:$current_name|ok")
+  fi
+fi
+
+# Validate sources block: enforce only for non-package-manager types
+sources_lines=$(printf "%b" "$archives_block" | awk '/^sources:/,0')
+src_name=""; src_type=""; src_sha=""; src_url=""
+while IFS= read -r l; do
+  if [[ $l =~ ^[[:space:]]*-[[:space:]]name: ]]; then
+    # evaluate previous
+    if [[ -n $src_name ]]; then
+      if [[ $src_type == "pypi" || $src_type == "npm" ]]; then
+        report+=("sources:$src_name|skip")
+      else
+        if [[ -z $src_sha || $src_sha == "TBD" ]]; then
+          missing=$((missing+1))
+          report+=("sources:$src_name|missing")
+        else
+          report+=("sources:$src_name|ok")
+        fi
+      fi
+    fi
+    src_name=$(echo "$l" | sed -E 's/.*name: *"?([^" ]+)"?.*/\1/')
+    src_type=""; src_sha=""; src_url=""
+  elif [[ -n $src_name && $l =~ type: ]]; then
+    src_type=$(echo "$l" | sed -E 's/.*type: *([^ #]+)/\1/')
+  elif [[ -n $src_name && $l =~ sha256: ]]; then
+    src_sha=$(echo "$l" | sed -E 's/.*sha256: *([^ #]+).*/\1/')
+  elif [[ -n $src_name && $l =~ url: ]]; then
+    src_url=$(echo "$l" | sed -E 's/.*url: *([^ #]+)/\1/')
+  fi
+done < <(printf "%b" "$sources_lines")
+# tail entry
+if [[ -n $src_name ]]; then
+  if [[ $src_type == "pypi" || $src_type == "npm" ]]; then
+    report+=("sources:$src_name|skip")
+  else
+    if [[ -z $src_sha || $src_sha == "TBD" ]]; then
+      missing=$((missing+1))
+      report+=("sources:$src_name|missing")
+    else
+      report+=("sources:$src_name|ok")
+    fi
+  fi
+fi
+
+# Emit JSON if requested
 if [[ -n $JSON_OUT ]]; then
   {
     echo '{'
@@ -45,7 +112,7 @@ if [[ -n $JSON_OUT ]]; then
     echo '  "entries": ['
     for i in "${!report[@]}"; do
       n="${report[$i]%%|*}"; s="${report[$i]#*|}";
-      printf '    {"name": "%s", "state": "%s"}%s\n' "$n" "$s" $([[ $i -lt $((${#report[@]}-1)) ]] && echo ',')
+      printf '    {"entry": "%s", "state": "%s"}%s\n' "$n" "$s" $([[ $i -lt $((${#report[@]}-1)) ]] && echo ',')
     done
     echo '  ]'
     echo '}'
@@ -53,8 +120,8 @@ if [[ -n $JSON_OUT ]]; then
 fi
 
 if [[ $STRICT -eq 1 && $missing -gt 0 ]]; then
-  echo "Missing $missing checksum(s)" >&2
+  echo "Missing $missing checksum(s) (archives or non-package-manager sources)" >&2
   exit 4
 fi
 
-echo "Source validation: $missing missing checksum(s)" >&2
+echo "Validation complete: $missing missing (archives + strict sources)" >&2

@@ -415,14 +415,15 @@ cleanup-wsl.sh              # WSL cleanup
 
 ### Visual Studio Code
 ```bash
-~/dev-scripts/setup/common/setup-vscode.sh
+~/dev-scripts/scripts/setup/setup-vscode.sh
 cp ~/dev-scripts/config/vscode-settings.json ~/.config/Code/User/settings.json
 ```
 
 ### JetBrains IDEs
 Free for students: https://www.jetbrains.com/student/
 ```bash
-~/dev-scripts/setup/common/setup-intellij.sh
+# Use JetBrains Toolbox (manual install) or install via your platform package manager.
+# This repo currently focuses on VS Code automation.
 ```
 
 ## Resources

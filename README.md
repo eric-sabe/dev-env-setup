@@ -20,13 +20,13 @@ A comprehensive collection of scripts to set up and manage development environme
    ```
 
 3. **Run platform setup**:
-   - **macOS**: `./setup/macos/setup-mac.sh`
-   - **Linux**: `./setup/linux/setup-linux.sh`
-   - **Windows**: `./setup/windows/setup-windows.ps1` then `./setup/windows/setup-wsl.sh`
+   - **macOS**: `./scripts/setup/macos/setup-mac.sh`
+   - **Linux**: `./scripts/setup/linux/setup-linux.sh`
+   - **Windows**: `./scripts/setup/windows/setup-windows.ps1` then `./scripts/setup/windows/setup-wsl.sh`
 
 4. **Create your first project**:
-   - **Python**: `./quickstart/quickstart-python.sh`
-   - **Node.js**: `./quickstart/quickstart-node.sh`
+   - **Python**: `./scripts/quickstart/quickstart-python.sh`
+   - **Node.js**: `./scripts/quickstart/quickstart-node.sh`
 
 5. **Start coding!**
 
@@ -42,20 +42,20 @@ A comprehensive collection of scripts to set up and manage development environme
 
 | Script | Purpose |
 |--------|---------|
-| `setup/macos/setup-mac.sh` | Complete macOS development setup |
-| `setup/linux/setup-linux.sh` | Complete Linux development setup |
-| `quickstart/quickstart-python.sh` | Interactive Python project generator |
-| `quickstart/quickstart-node.sh` | Interactive Node.js project generator |
-| `management/env-manager.sh` | Environment management tool |
-| `management/health-check.sh` | System health diagnostics |
-| `courses/setup-database.sh` | Database course setup |
-| `utils/diagnose.sh` | Aggregate diagnostics snapshot (add `--json` for machine-readable) |
-| `utils/emergency-recovery.sh` | Last-resort recovery helpers |
-| `utils/performance-tune.sh` | Performance snapshot suggestions |
-| `utils/semester-archive.sh` | Archive semester projects |
-| `setup/macos/cleanup-mac.sh` | macOS targeted cleanup wrapper |
-| `setup/linux/cleanup-linux.sh` | Linux targeted cleanup wrapper |
-| `setup/windows/cleanup-wsl.sh` | WSL targeted cleanup wrapper |
+| `scripts/setup/macos/setup-mac.sh` | Complete macOS development setup |
+| `scripts/setup/linux/setup-linux.sh` | Complete Linux development setup |
+| `scripts/quickstart/quickstart-python.sh` | Interactive Python project generator |
+| `scripts/quickstart/quickstart-node.sh` | Interactive Node.js project generator |
+| `scripts/management/env-manager.sh` | Environment management tool |
+| `scripts/management/health-check.sh` | System health diagnostics |
+| `scripts/courses/setup-database.sh` | Database course setup |
+| `scripts/utils/diagnose.sh` | Aggregate diagnostics snapshot (add `--json` for machine-readable) |
+| `scripts/utils/emergency-recovery.sh` | Last-resort recovery helpers |
+| `scripts/utils/performance-tune.sh` | Performance snapshot suggestions |
+| `scripts/utils/semester-archive.sh` | Archive semester projects |
+| `scripts/setup/macos/cleanup-mac.sh` | macOS targeted cleanup wrapper |
+| `scripts/setup/linux/cleanup-linux.sh` | Linux targeted cleanup wrapper |
+| `scripts/setup/windows/cleanup-wsl.sh` | WSL targeted cleanup wrapper |
 | `scripts/validate.sh` | Static analysis runner (shellcheck) |
 
 ## 📖 Documentation
@@ -185,15 +185,18 @@ Run a script again after manual fixes—idempotent guards skip already-installed
 
 Recent hardening & quality improvements:
 
-> Strict Mode: All source entries must now have a concrete SHA256; CI fails if any `sha256: TBD` remains. Use `lock-sources.sh --write` to populate hashes before pushing.
-> Strict Mode: All source entries must have a concrete SHA256; CI fails if any `sha256: TBD` remains. Use `lock-sources.sh --write` to populate hashes. GPG key fingerprints are matched before repository addition (fail-fast if mismatch).
+> Strict Mode Policy (v1.0):
+> - Archives (manifests.archives) must have concrete `sha256` and `content_length`. CI fails if any are missing.
+> - Sources that refer to package managers (type: pypi, npm) are informational and excluded from strict checksum enforcement.
+> - For non package-manager sources that point to concrete artifacts, a `sha256` is required.
+> - GPG key fingerprints are matched before repository addition (fail-fast on mismatch).
 
 ### Checksum Locking Workflow
-1. Add new source entry in `manifests/versions.yaml` with `sha256: TBD`.
-2. Run `scripts/security/lock-sources.sh` (dry-run prints updated manifest).
+1. Add new entry in `manifests/versions.yaml` with `sha256: TBD`.
+2. Run `scripts/security/lock-sources.sh` (dry-run prints updated manifest). For archives, this will compute and fill hashes; package-manager entries are skipped.
 3. Commit updated manifest or use `--write` to apply in place.
-4. CI `security-baseline` job reports missing hashes and shows strict preview.
-5. After all hashes locked, enable strict gate by switching CI to `--strict` (future step).
+4. CI `security-baseline` job enforces strict mode for archives and non package-manager sources.
+5. Keep hashes current when bumping versions; use archive verify workflows to catch upstream drift.
 
 `generate-sbom.sh` now emits CycloneDX style component list derived from the manifest (Python + Node globals).
 
