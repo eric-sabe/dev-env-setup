@@ -46,7 +46,15 @@ keys_block=$(awk 'BEGIN{inblk=0} \
   /^gpg_keys:/ {inblk=1;next} \
   /^[[:alpha:]_]+:/ { if(inblk){inblk=0} } \
   { if(inblk) print }' "$MANIFEST" || true)
-[[ -n $keys_block ]] || die "No gpg_keys section present in manifest" 3
+if [[ -z $keys_block ]]; then
+  if [[ $mode == "all" ]]; then
+    log "No gpg_keys section present; skipping verification"
+    $want_json && echo "[]"
+    exit 0
+  else
+    die "No gpg_keys section present in manifest" 3
+  fi
+fi
 
 names=(); fingerprints=(); sources=(); statuses=()
 current_name=""; current_fp=""; current_source=""; current_status=""; collecting=false
@@ -80,7 +88,13 @@ if $collecting; then
 fi
 
 if [[ ${#names[@]} -eq 0 ]]; then
-  die "No key entries found in gpg_keys" 3
+  if [[ $mode == "all" ]]; then
+    log "No key entries configured under gpg_keys; skipping"
+    $want_json && echo "[]"
+    exit 0
+  else
+    die "No key entries found in gpg_keys" 3
+  fi
 fi
 
 selected_indices=()

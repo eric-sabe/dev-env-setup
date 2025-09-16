@@ -2,7 +2,12 @@
 # Web Development Course Setup Script
 # Installs web development tools and frameworks for web dev courses
 
-set -Eeuo pipefail  # Exit on error, treat unset vars as error, and catch pipe failures
+# Strict mode is opt-in for interactive use. Enable with STRICT_MODE=1 or in CI.
+if [[ ${STRICT_MODE:-0} == 1 || -n ${CI:-} ]]; then
+    set -Eeuo pipefail
+else
+    set -o pipefail
+fi
 trap 'echo "[ERROR] setup-webdev failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UTIL_DIR="${SCRIPT_DIR%/courses*/}/utils"

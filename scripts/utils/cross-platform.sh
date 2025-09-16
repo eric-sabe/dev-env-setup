@@ -2,7 +2,14 @@
 # cross-platform.sh - Shared utilities (logging, platform detection, safety helpers)
 # Sourced by other scripts. Keep POSIX-ish where reasonable.
 
-set -Eeuo pipefail
+# Only set strict mode when executed directly, not when sourced. Opt-in via STRICT_MODE or in CI.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  if [[ ${STRICT_MODE:-0} == 1 || -n ${CI:-} ]]; then
+    set -Eeuo pipefail
+  else
+    set -o pipefail
+  fi
+fi
 
 # Colors (fallback if no tty)
 if [[ -t 1 ]]; then

@@ -3,7 +3,13 @@
 # Loads manifests/versions.yaml and exposes helper query functions.
 # Future phases: checksum mapping, source URLs, profile expansion.
 
-set -Eeuo pipefail
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  if [[ ${STRICT_MODE:-0} == 1 || -n ${CI:-} ]]; then
+    set -Eeuo pipefail
+  else
+    set -o pipefail
+  fi
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${SCRIPT_DIR%/scripts/utils*}"

@@ -2,7 +2,11 @@
 # Python Project Quickstart Script
 # Creates a comprehensive Python project with best practices
 
-set -Eeuo pipefail
+if [[ ${STRICT_MODE:-0} == 1 || -n ${CI:-} ]]; then
+    set -Eeuo pipefail
+else
+    set -o pipefail
+fi
 trap 'echo "[ERROR] quickstart-python failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
 
 # Colors for output

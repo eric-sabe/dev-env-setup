@@ -2,7 +2,11 @@
 # VS Code Setup Script (refactored)
 # Installs and configures VS Code with development extensions using shared utils.
 
-set -Eeuo pipefail
+if [[ ${STRICT_MODE:-0} == 1 || -n ${CI:-} ]]; then
+    set -Eeuo pipefail
+else
+    set -o pipefail
+fi
 trap 'echo "[ERROR] vscode setup failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

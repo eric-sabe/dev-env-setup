@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # verify.sh - Shared lightweight post-install verification helpers
 # Usage: source this file, then call verify_command, verify_service, etc.
-set -Eeuo pipefail
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  if [[ ${STRICT_MODE:-0} == 1 || -n ${CI:-} ]]; then
+    set -Eeuo pipefail
+  else
+    set -o pipefail
+  fi
+fi
 
 PASS_COUNT=0
 FAIL_COUNT=0

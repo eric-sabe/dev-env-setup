@@ -2,7 +2,13 @@
 # Database Systems Course Setup Script
 # Installs database tools and development environment for database courses
 
-set -Eeuo pipefail  # Exit on error, unset var, pipefail
+# Strict mode is opt-in for interactive use. Enable with STRICT_MODE=1 or in CI.
+if [[ ${STRICT_MODE:-0} == 1 || -n ${CI:-} ]]; then
+    set -Eeuo pipefail
+else
+    # Safer defaults without aborting on every minor issue.
+    set -o pipefail
+fi
 trap 'echo "[ERROR] setup-database failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UTIL_DIR="${SCRIPT_DIR%/courses*/}/utils"

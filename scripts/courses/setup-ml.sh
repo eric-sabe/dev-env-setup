@@ -2,7 +2,12 @@
 # Machine Learning Course Setup Script
 # Installs ML tools and frameworks for machine learning courses
 
-set -Eeuo pipefail  # Stricter error handling
+# Strict mode is opt-in for interactive use. Enable with STRICT_MODE=1 or in CI.
+if [[ ${STRICT_MODE:-0} == 1 || -n ${CI:-} ]]; then
+    set -Eeuo pipefail
+else
+    set -o pipefail
+fi
 trap 'echo "[ERROR] setup-ml failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UTIL_DIR="${SCRIPT_DIR%/courses*/}/utils"

@@ -2,7 +2,12 @@
 # Mobile Development Course Setup Script
 # Installs mobile development tools and frameworks
 
-set -Eeuo pipefail
+# Strict mode is opt-in for interactive use. Enable with STRICT_MODE=1 or in CI.
+if [[ ${STRICT_MODE:-0} == 1 || -n ${CI:-} ]]; then
+  set -Eeuo pipefail
+else
+  set -o pipefail
+fi
 
 # Source shared utilities (logging, platform detection, helpers)
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
