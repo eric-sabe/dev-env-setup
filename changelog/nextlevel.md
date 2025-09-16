@@ -100,6 +100,11 @@ Acceptance Criteria:
 Deliverables:
 - `scripts/security/checksums.sh` with `verify_download <url> <sha256>`.
 - Manifest extension: `sources:` block with URL + SHA256.
+
+### Phase 3 Incremental Additions (Post Baseline)
+- Added `gpg_keys:` manifest section and `verify-gpg-key.sh` to enforce repository signing key fingerprints (initial: Microsoft VS Code).
+- Integrated GPG verification into VS Code setup script (Ubuntu/Deb/RPM paths) pre-repo registration.
+- CI security-baseline job now produces `gpg_keys_report.json` and fails on placeholder/mismatch.
 - SBOM generation: `scripts/security/generate-sbom.sh` (CycloneDX for pip/npm + manual system list) → `sbom/`.
 - LICENSE aggregation script: detect distinct licenses, output `THIRD_PARTY_LICENSES.md`.
 - Ban `curl | bash` patterns; enforce detached download + verify + execute.
@@ -293,4 +298,8 @@ Progress snapshots appended here with timestamped mini-sections as work proceeds
 [2025-09-15T02:40Z] Refactored setup-eclipse with shared utils, safety flags, idempotent download.
 [2025-09-15T02:45Z] Refactored setup-vscode with shared utils, idempotent extension installs.
 [2025-09-15T03:05Z] Phase 2 CI expansion: added markdownlint config, docs consistency & smoke scripts, expanded workflow with matrix (ubuntu/macos) and artifacts, README badges inserted.
+[2025-09-15T03:25Z] Phase 2 refinements completed (pin audit JSON output, reduced noise) and Phase 3 scaffolding added: sources block, checksum/SBOM/license stubs, CI security-stubs job, README security section updated.
+[2025-09-15T03:45Z] Phase 3 baseline: added sources validation script, enhanced checksum utility (verify_or_record), CI security-baseline job with non-strict hash check, checksum placeholders wired into Eclipse/VSCode installers, README updated.
+[2025-09-15T04:00Z] Phase 3 enhancements: lock-sources script added, SBOM generator now lists manifest packages (CycloneDX), CI strict-mode preview step, README locking workflow documented.
+[2025-09-15T04:10Z] Strict checksum enforcement activated: CI now runs validate-sources.sh --strict; README updated with mandatory hash policy.
 ```

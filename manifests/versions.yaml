@@ -4,6 +4,149 @@ metadata:
   description: "Pinned versions and package groups for deterministic environment provisioning"
   notes: |
     This initial scaffold will expand with sources + checksums in Phase 3.
+sources:
+  python:
+    - name: numpy
+      version: "1.26.*"
+      type: pypi
+      url: https://pypi.org/project/numpy/
+      sha256: TBD   # resolved at lock time
+    - name: torch
+      version: "2.2.*"
+      type: pypi
+      url: https://pypi.org/project/torch/
+      sha256: TBD
+  node:
+    - name: typescript
+      version: "5.4.*"
+      type: npm
+      url: https://registry.npmjs.org/typescript
+      sha256: TBD
+  archives:
+    - name: eclipse-macos-x86_64
+      version: "2025-09"
+      type: dmg
+      url: https://download.eclipse.org/technology/epp/downloads/release/2025-09/R/eclipse-java-2025-09-R-macosx-cocoa-x86_64.dmg
+  content_length: 368257066
+      sha256: c58d7dd1a1f8f71a9eae46e5e506a90d3edb8496ce700d2fc30ac20995f5e255
+    - name: eclipse-macos-aarch64
+      version: "2025-09"
+      type: dmg
+      url: https://download.eclipse.org/technology/epp/downloads/release/2025-09/R/eclipse-java-2025-09-R-macosx-cocoa-aarch64.dmg
+  content_length: 367051589
+      sha256: 3e99fd5718887a5ea5c26003d14207331027b8dda284db02a5e5fd8e7bb88b9e
+    - name: vscode
+      version: "1.xx"
+      type: universal-archive
+      url: https://update.code.visualstudio.com/latest/darwin/stable
+      sha256: 79531e3edb4c1bdcff829bc7ecfada215eee34bee6bc110fcdbfb68a57926974
+    - name: eclipse-windows-x86_64-jee
+      version: "2025-09"
+      type: zip
+      url: https://download.eclipse.org/technology/epp/downloads/release/2025-09/R/eclipse-jee-2025-09-R-win32-x86_64.zip
+  content_length: 580833797
+      sha256: 597312f508fbd637292c5e2e9685f8bfca1442ba1e0cfdb1ab05c87254326450
+    - name: eclipse-windows-aarch64-jee
+      version: "2025-09"
+      type: zip
+      url: https://download.eclipse.org/technology/epp/downloads/release/2025-09/R/eclipse-jee-2025-09-R-win32-aarch64.zip
+  content_length: 573523360
+      sha256: 4bf33ee2263de1818725da00144ce97e372f7da57eea8716220533ae7e22cdbb
+    - name: eclipse-windows-x86_64-java
+      version: "2025-09"
+      type: zip
+      url: https://download.eclipse.org/technology/epp/downloads/release/2025-09/R/eclipse-java-2025-09-R-win32-x86_64.zip
+  content_length: 366617771
+      sha256: d10906f3754c4fcb5e5bc5b9f8e1a73ce87282ed83de1bad70073bdacd4e80c7
+    - name: eclipse-windows-aarch64-java
+      version: "2025-09"
+      type: zip
+      url: https://download.eclipse.org/technology/epp/downloads/release/2025-09/R/eclipse-java-2025-09-R-win32-aarch64.zip
+  content_length: 363308775
+      sha256: 3acca9d37d28395c81cdb0fe9b6bc881cd5015679282910283eb03c40086cc11
+    - name: eclipse-linux-x86_64-java
+      version: "2025-09"
+      type: tar.gz
+      url: https://download.eclipse.org/technology/epp/downloads/release/2025-09/R/eclipse-java-2025-09-R-linux-gtk-x86_64.tar.gz
+  content_length: 367565151
+      sha256: 2f9bea0be8dba1840047e0ad340117803002c441b4af5ae5c78aee736eb87147
+    - name: eclipse-linux-aarch64-java
+      version: "2025-09"
+      type: tar.gz
+      url: https://download.eclipse.org/technology/epp/downloads/release/2025-09/R/eclipse-java-2025-09-R-linux-gtk-aarch64.tar.gz
+  content_length: 366939358
+      sha256: c71663c26176e026ca78aec8417920ca51534c6207a355b3e859cbfc452609a4
+    - name: eclipse-linux-riscv64-java
+      version: "2025-09"
+      type: tar.gz
+      url: https://download.eclipse.org/technology/epp/downloads/release/2025-09/R/eclipse-java-2025-09-R-linux-gtk-riscv64.tar.gz
+  content_length: 365709098
+      sha256: d198fa77306083cff82f325e6e5358767b75eda49d25e895913176d02e4db48d
+    - name: eclipse-macos-x86_64-jee
+      version: "2025-09"
+      type: dmg
+      url: https://download.eclipse.org/technology/epp/downloads/release/2025-09/R/eclipse-jee-2025-09-R-macosx-cocoa-x86_64.dmg
+  content_length: 593531067
+      sha256: 0a5aebb5c68406fc85dfb9a2e85d3babafb251d2b046b91c3af12a2077b96d85
+    - name: eclipse-macos-aarch64-jee
+      version: "2025-09"
+      type: dmg
+      url: https://download.eclipse.org/technology/epp/downloads/release/2025-09/R/eclipse-jee-2025-09-R-macosx-cocoa-aarch64.dmg
+  content_length: 591571128
+      sha256: 8bd975fa2a6c3439ad585a316d28388ff7252e3d72b9e9e233dc9011fe6e25f7
+    - name: eclipse-linux-x86_64-jee
+      version: "2025-09"
+      type: tar.gz
+      url: https://download.eclipse.org/technology/epp/downloads/release/2025-09/R/eclipse-jee-2025-09-R-linux-gtk-x86_64.tar.gz
+  content_length: 597062964
+      sha256: 6c509b14b46d96d67f189c00a05777307fc59270c5ea19ef5fd2d01d0b3d78a8
+    - name: eclipse-linux-aarch64-jee
+      version: "2025-09"
+      type: tar.gz
+      url: https://download.eclipse.org/technology/epp/downloads/release/2025-09/R/eclipse-jee-2025-09-R-linux-gtk-aarch64.tar.gz
+  content_length: 595781957
+      sha256: 0d7c3f76de068f3d1eeecce325468a077c2c51d9cd8f7c025fc715a4c9589027
+    - name: eclipse-linux-riscv64-jee
+      version: "2025-09"
+      type: tar.gz
+      url: https://download.eclipse.org/technology/epp/downloads/release/2025-09/R/eclipse-jee-2025-09-R-linux-gtk-riscv64.tar.gz
+  content_length: 541346839
+      sha256: ea4098a41833d5ca96323bf8bb7ddc8e039765f85c86ae4038901637a97b3b93
+    # eclipse_release metadata groups all platform variants for easier iteration / automation
+    - name: eclipse-release-2025-09
+      version: "2025-09"
+      type: meta
+      url: https://download.eclipse.org/technology/epp/downloads/release/2025-09/R/
+      sha256: 0000000000000000000000000000000000000000000000000000000000000000  # meta placeholder
+      variants:
+        java:
+          - eclipse-macos-x86_64
+          - eclipse-macos-aarch64
+          - eclipse-windows-x86_64-java
+          - eclipse-windows-aarch64-java
+          - eclipse-linux-x86_64-java
+          - eclipse-linux-aarch64-java
+          - eclipse-linux-riscv64-java
+        jee:
+          - eclipse-macos-x86_64-jee
+          - eclipse-macos-aarch64-jee
+          - eclipse-windows-x86_64-jee
+          - eclipse-windows-aarch64-jee
+          - eclipse-linux-x86_64-jee
+          - eclipse-linux-aarch64-jee
+          - eclipse-linux-riscv64-jee
+
+gpg_keys:
+  # Provide trusted GPG key fingerprints for external repositories / archives.
+  # Use full 40-hex fingerprint (no spaces). Obtain via:
+  #   curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | \
+  #     gpg --show-keys --with-colons | awk -F: '/^fpr/ {print $10; exit}'
+  - name: microsoft-vscode
+    purpose: "Apt/Yum repository for VS Code"
+    source: https://packages.microsoft.com/keys/microsoft.asc
+    fingerprint: BC528686B50D79E339D3721CEB3E94ADBE1229CF   # replace with real 40-char fingerprint
+    status: active
+
 
 python:
   runtime:

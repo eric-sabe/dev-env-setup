@@ -7,6 +7,7 @@ trap 'echo "[ERROR] vscode setup failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UTIL_DIR="${SCRIPT_DIR%/scripts/setup*}/scripts/utils"
+ROOT_DIR="${SCRIPT_DIR%/scripts/setup*}"
 if [[ -f "$UTIL_DIR/cross-platform.sh" ]]; then
     # shellcheck source=../utils/cross-platform.sh
     source "$UTIL_DIR/cross-platform.sh"
@@ -78,12 +79,21 @@ install_vscode() {
             brew install --cask visual-studio-code
             ;;
         ubuntu)
+            # Verify Microsoft VS Code repo key fingerprint before trusting repository
+            if ! "$ROOT_DIR/scripts/security/verify-gpg-key.sh" --name microsoft-vscode; then
+                log_error "GPG key verification failed for microsoft-vscode"
+                exit 1
+            fi
             curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-archive-keyring.gpg
             echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/repos/code stable main" | sudo tee /etc/apt/sources.list.d/vscode.list > /dev/null
             sudo apt update
             sudo apt install -y code
             ;;
         redhat)
+            if ! "$ROOT_DIR/scripts/security/verify-gpg-key.sh" --name microsoft-vscode; then
+                log_error "GPG key verification failed for microsoft-vscode"
+                exit 1
+            fi
             sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
             echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | sudo tee /etc/yum.repos.d/vscode.repo > /dev/null
             sudo yum install -y code

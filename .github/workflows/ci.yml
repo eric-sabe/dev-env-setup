@@ -75,3 +75,29 @@ jobs:
             README.md
             manifests/versions.yaml
             TOOLS_MATRIX.md
+
+  security-baseline:
+    name: Security Baseline
+    runs-on: ubuntu-latest
+    needs: [smoke]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run checksum script (help)
+        run: bash scripts/security/checksums.sh || true
+      - name: Validate sources (strict)
+        run: bash scripts/security/validate-sources.sh --strict --output-json sources_report.json
+      - name: Verify GPG keys
+        run: bash scripts/security/verify-gpg-key.sh --all --json > gpg_keys_report.json
+      - name: Generate SBOM stub
+        run: bash scripts/security/generate-sbom.sh
+      - name: Generate license stub
+        run: bash scripts/security/licenses.sh
+      - name: Upload security artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-baseline
+          path: |
+            sbom/sbom.json
+            THIRD_PARTY_LICENSES.md
+            sources_report.json
+            gpg_keys_report.json

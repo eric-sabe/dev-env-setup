@@ -33,24 +33,10 @@ A comprehensive collection of scripts to set up and manage development environme
 ## ✅ What You Get
 
 ### Complete Development Environment
-- **Languages**: Python, Node.js, Java, C++
-- **Tools**: Git, Docker, databases, testing frameworks
-- **IDEs**: VS Code, JetBrains IDEs (free student licenses)
-- **Platforms**: macOS, Linux, Windows (WSL2)
 
 ### Course-Specific Setups
-- **Database Systems**: PostgreSQL, MySQL, MongoDB, Redis
-- **Web Development**: React, Vue, Angular, Express, Django
-- **Machine Learning**: TensorFlow, PyTorch, scikit-learn, Jupyter
-- **Systems Programming**: GCC, GDB, Valgrind, QEMU
-- **Mobile Development**: React Native, Flutter
 
 ### Management Tools
-- **Environment Manager**: Interactive tool management
-- **Health Checks**: System diagnostics and monitoring
-- **Backup/Restore**: Complete environment preservation
-- **Cleanup**: Cache and junk file removal
-- **Post-Install Verification**: Every course setup now self-validates installed tools (see Verification section)
 
 ## 🛠️ Key Scripts
 
@@ -74,21 +60,11 @@ A comprehensive collection of scripts to set up and manage development environme
 
 ## 📖 Documentation
 
-- **[Complete Guide](GUIDE.md)**: Detailed setup instructions, troubleshooting, and advanced usage (renamed from guide.md)
-- Platform-specific guidance consolidated in the Guide
-- Script-level inline documentation within each script
 
 ## 🧰 Utilities Overview
 
 Located in `scripts/utils` unless noted:
 
-- `cross-platform.sh`: Shared logging, platform detection, safety helpers.
-- `diagnose.sh`: Collects environment summary (system, tools, versions).
-- `emergency-recovery.sh`: Minimal automated recovery + diagnostics snapshot.
-- `performance-tune.sh`: Performance metrics snapshot (non-destructive).
-- `semester-archive.sh`: Compresses project directories for archival.
-- Cleanup wrappers: `setup/macos/cleanup-mac.sh`, `setup/linux/cleanup-linux.sh`, `setup/windows/cleanup-wsl.sh`.
-- Validation: `scripts/validate.sh` runs shellcheck when available.
 
 See `COVERAGE_MATRIX.md` for feature mapping and `DEFECTS.md` for improvement history. Recent additions: JSON diagnostics output, pyproject-only Python project option, dynamic MongoDB repo detection, idempotent semester archiving, resilient health check aggregation.
 
@@ -189,11 +165,6 @@ See `COVERAGE_MATRIX.md` for feature mapping and `DEFECTS.md` for improvement hi
 Each major course setup script (`setup-database.sh`, `setup-ml.sh`, `setup-webdev.sh`, `setup-systems.sh`, `setup-mobile.sh`) now performs a standardized verification pass at the end using `scripts/utils/verify.sh`.
 
 What it checks (context-aware, non-fatal where appropriate):
-- Presence of core commands (compilers, runtimes, CLIs)
-- Python imports for key ML / data / web libraries
-- Node global packages / CLIs for web & mobile frameworks
-- Active services & listening ports for databases (PostgreSQL, MySQL/MariaDB, MongoDB, Redis)
-- Lightweight smoke tests (Node execution, tiny C compile, PyTorch / TensorFlow GPU availability, Flutter doctor)
 
 Summary output reports PASS / FAIL counts at the end of each script. Failures do not always abort; they highlight gaps students can fix immediately.
 
@@ -202,16 +173,20 @@ Run a script again after manual fixes—idempotent guards skip already-installed
 ## 🔐 Security & Hardening
 
 Recent hardening & quality improvements:
-- Unified strict Bash safety (`set -Eeuo pipefail`) and error traps across scripts.
-- Added optional MySQL secure configuration (interactive or automated) during database course setup.
-- Dynamic MongoDB repository codename detection for Ubuntu & derivatives (fallback safety if unknown).
-- Safer cleanup operations with dry-run and confirmation prompts (`cleanup-dev.sh`).
-- Centralized logging and platform detection via `cross-platform.sh` to reduce divergence.
+
+> Strict Mode: All source entries must now have a concrete SHA256; CI fails if any `sha256: TBD` remains. Use `lock-sources.sh --write` to populate hashes before pushing.
+> Strict Mode: All source entries must have a concrete SHA256; CI fails if any `sha256: TBD` remains. Use `lock-sources.sh --write` to populate hashes. GPG key fingerprints are matched before repository addition (fail-fast if mismatch).
+
+### Checksum Locking Workflow
+1. Add new source entry in `manifests/versions.yaml` with `sha256: TBD`.
+2. Run `scripts/security/lock-sources.sh` (dry-run prints updated manifest).
+3. Commit updated manifest or use `--write` to apply in place.
+4. CI `security-baseline` job reports missing hashes and shows strict preview.
+5. After all hashes locked, enable strict gate by switching CI to `--strict` (future step).
+
+`generate-sbom.sh` now emits CycloneDX style component list derived from the manifest (Python + Node globals).
 
 Recommended manual follow-ups (not automated):
-- Run `mysql_secure_installation` again if you need custom auth plugins or remote access changes.
-- Review database service bind addresses before exposing outside localhost.
-- Keep Docker Desktop / engine updated for CVE patches.
 
 ## 🖥️ GPU / ML Setup
 
@@ -224,10 +199,6 @@ CUDA / cuDNN installation steps remain partially manual on some distros (RHEL/Ce
 ## 🎓 For Students
 
 This toolkit is designed specifically for computer science students to:
-- **Save time** on environment setup
-- **Learn best practices** through automated configurations
-- **Focus on coding** instead of configuration
-- **Maintain consistency** across different courses and projects
 
 ## 🤝 Contributing
 
@@ -237,8 +208,39 @@ We welcome contributions! See our [contributing guidelines](CONTRIBUTING.md) for
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
----
 
 **Happy coding! 🎉**
 
 *Review scripts before running with administrative privileges. These tools are provided for educational purposes.*
+
+### Archive Integrity Verification
+
+We track external Eclipse distributions (multi-OS / arch, Java & JEE flavors) inside `manifests/versions.yaml` with both `sha256` and `content_length`.
+
+Scripts:
+* `scripts/security/collect-content-lengths.sh` – probe and list current Content-Length values.
+* `scripts/security/verify-archives.sh` – quick (HEAD only) or full (download + hash) verification.
+* `scripts/tools/update-eclipse-release.sh` – bump Eclipse release, reset hashes/sizes for re-lock.
+
+Usage examples:
+```
+# Quick (size/header) verify all eclipse entries
+bash scripts/security/verify-archives.sh --quick --filter eclipse
+
+# Full verify (downloads + hash) – use sparingly / CI manual dispatch
+bash scripts/security/verify-archives.sh --filter eclipse
+
+# Bump release (dry-run) from 2025-09 to 2025-12
+bash scripts/tools/update-eclipse-release.sh 2025-09 2025-12
+
+# Write changes in-place
+bash scripts/tools/update-eclipse-release.sh 2025-09 2025-12 --write
+```
+
+### CI
+
+GitHub Actions workflow: `.github/workflows/verify-archives.yml`
+* On push / PR: runs quick verification (no full downloads) for `eclipse-*` archives.
+* Manual dispatch (`workflow_dispatch` with `full=true`): performs full download + hash verification.
+
+Exit codes: build fails on mismatched size or hash, guarding against silent upstream changes or HTML error pages.

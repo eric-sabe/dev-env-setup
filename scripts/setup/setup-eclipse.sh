@@ -158,6 +158,18 @@ install_eclipse() {
         log_error "Failed to download Eclipse"
         exit 1
     fi
+    # Phase 3: attempt checksum verification if manifest hash present (placeholder)
+    if command -v bash >/dev/null 2>&1 && [[ -f "${SCRIPT_DIR%/scripts/setup*}/scripts/security/checksums.sh" ]]; then
+        # shellcheck source=../security/checksums.sh
+        source "${SCRIPT_DIR%/scripts/setup*}/scripts/security/checksums.sh" || true
+        # Lookup would parse versions.yaml sources (future enhancement)
+        EXPECTED_SHA="TBD" # placeholder until populated
+        if [[ "$EXPECTED_SHA" != "TBD" ]]; then
+            verify_file "$install_dir/$archive_name" "$EXPECTED_SHA" || log_warning "Checksum mismatch (non-fatal yet)"
+        else
+            log_info "Checksum deferred (TBD entry)"
+        fi
+    fi
 
     # Extract/install Eclipse
     cd "$install_dir"
