@@ -6,8 +6,8 @@ cd "$REPO_ROOT"
 
 log() { printf "[check-docs] %s\n" "$*"; }
 
-if [[ ! -x scripts/tools/generate-docs.sh ]]; then
-  log "generate-docs.sh not found or not executable" >&2
+if [[ ! -f scripts/tools/generate-docs.sh ]]; then
+  log "generate-docs.sh not found" >&2
   exit 2
 fi
 

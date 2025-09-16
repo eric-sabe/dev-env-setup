@@ -12,6 +12,25 @@ if [[ ! -f "$VERSIONS_FILE" ]]; then
   exit 1
 fi
 
+# Detect presence of expected sections before regenerating
+has_python_groups() {
+  # Detect a top-level python: section with grouped packages (not sources.python)
+  awk '/^python:/,/^[a-z]/' "$VERSIONS_FILE" | grep -E '^[ ]{6}[A-Za-z0-9_.@-]+:' >/dev/null 2>&1
+}
+has_node_globals() {
+  # Detect a top-level node: section with a globals: mapping
+  awk '/^node:/,/^[a-z]/' "$VERSIONS_FILE" | grep -E '^[ ]{2}globals:' -A100 | grep -E '^[ ]{4}[A-Za-z0-9_@\-]+:' >/dev/null 2>&1
+}
+has_profiles() {
+  grep -E '^[ ]{0}profiles:' "$VERSIONS_FILE" >/dev/null 2>&1
+}
+
+# If neither Python groups nor Node globals are present, skip generation to keep docs stable
+if ! has_python_groups && ! has_node_globals && ! has_profiles; then
+  echo "[generate-docs] No python groups, node globals, or profiles detected in manifest; skipping docs generation." >&2
+  exit 0
+fi
+
 parse_section() {
   awk "/^$1:/,/^[A-Za-z0-9_-]+:/" "$VERSIONS_FILE" | sed '1d;$d' || true
 }
@@ -53,12 +72,17 @@ emit_node_table() {
   echo '### Node Global Packages'; echo
   echo '| Package | Pin |'
   echo '|---------|-----|'
-  awk '/node:/,/^linux:/' "$VERSIONS_FILE" | awk '/globals:/,/^linux:/' | \
-    grep -E '^[[:space:]]+[A-Za-z0-9_@\-]+:' | grep -v 'globals:' | \
-    sed -E 's/^[[:space:]]*//; s/"//g' | while IFS=: read -r name ver; do
-      ver=$(echo "$ver" | xargs)
-      echo "| $name | $ver |"
-    done
+  # Only emit rows from a top-level node.globals mapping. Do not infer from profiles.
+  awk '/^node:/,/^[a-z]/' "$VERSIONS_FILE" | awk '
+    /^[ ]{2}globals:[ ]*$/ { ingl=1; next }
+    /^[ ]{2}[A-Za-z0-9_-]+:[ ]*$/ { if ($0 !~ /globals:/) ingl=0 }
+    ingl && /^[ ]{4}[A-Za-z0-9_@\-]+:[ ]*/ {
+      line=$0; sub(/^[ ]{4}/,"",line);
+      name=line; sub(/:.*/,"",name);
+      pin=$0; sub(/^[^:]+:[ ]*/,"",pin); gsub(/[" \t]/,"",pin);
+      printf("| %s | %s |\n", name, pin);
+    }
+  '
   echo
 }
 
