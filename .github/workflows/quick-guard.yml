@@ -1,0 +1,26 @@
+name: quick-guard
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Quick archive verify
+        run: |
+          bash scripts/security/verify-archives.sh --quick --concurrency 6 --filter eclipse
+      - name: Ensure baseline
+        run: |
+          bash scripts/security/ensure-baseline.sh
+      - name: Drift check (non-fatal)
+        run: |
+          if bash scripts/security/drift-check.sh; then echo "No drift"; else echo "Drift detected (non-blocking)"; fi
+      - name: Ledger integrity (if present)
+        run: |
+          if [[ -f state/ledger.jsonl ]]; then bash scripts/state/ledger.sh verify; else echo "no ledger yet"; fi

@@ -60,6 +60,17 @@ A comprehensive collection of scripts to set up and manage development environme
 
 ## 📖 Documentation
 
+## 🧪 Platform Features (Experimental)
+The following components are early-stage and may change or be removed while we refocus on core student setup workflows:
+
+- Archive integrity verification (`scripts/security/verify-archives.sh`) – now outputs JSON (`--output-json`) for CI; schema may evolve.
+- Prefetch/offline cache (`scripts/cache/prefetch.sh`, `scripts/utils/offline.sh`) – experimental; not yet wired into course scripts broadly.
+- Operation ledger (`scripts/state/ledger.sh`) – append-only audit chain; format may change.
+- Rollback stub (`scripts/state/rollback.sh`) – limited uninstall support (npm globals, pip groups) – interface unstable.
+- Structured logging (`scripts/utils/log-json.sh`) – initial schema for future metrics.
+
+See `changelog/nextlevel.md` “Scope Stabilization” section for the short list of wrap‑up tasks before advanced phases resume. Treat these as optional; they are not required for normal student usage.
+
 
 ## 🧰 Utilities Overview
 
@@ -244,3 +255,38 @@ GitHub Actions workflow: `.github/workflows/verify-archives.yml`
 * Manual dispatch (`workflow_dispatch` with `full=true`): performs full download + hash verification.
 
 Exit codes: build fails on mismatched size or hash, guarding against silent upstream changes or HTML error pages.
+
+### Phase 4: State & Offline (Early)
+
+State tracking, rollback prototypes, and offline reproducibility layer are being introduced:
+
+Components:
+* `scripts/state/ledger.sh` – append-only JSONL ledger with hash-chained integrity (`record` / `verify`).
+* `scripts/state/rollback.sh` – preliminary uninstall (npm globals, pip user packages) with safe dry-run design planned.
+* `scripts/utils/offline.sh` – `fetch_with_cache` + `OFFLINE_MODE=1` gating for networkless replays.
+* `scripts/cache/prefetch.sh` – pre-download (currently Eclipse archives) into `cache/` by hash.
+
+Ledger usage:
+```
+# Record an action
+bash scripts/state/ledger.sh record --action install_python --component numpy --status ok --duration-ms 3120
+
+# Verify chain integrity
+bash scripts/state/ledger.sh verify
+```
+
+Prefetch + offline verify:
+```
+# Populate cache (downloads if missing)
+bash scripts/cache/prefetch.sh --filter eclipse
+
+# Run quick verification without network
+OFFLINE_MODE=1 bash scripts/security/verify-archives.sh --quick --filter eclipse
+```
+
+Conventions:
+* Ledger file: `state/ledger.jsonl` (ignored by git).
+* Head hash: `state/ledger.head` (verifies tamper-free chain).
+* Cache dir: `cache/` (ignored). Future: embed manifest fingerprint to detect stale artifacts.
+
+Planned next (short-term): extend rollback targets (brew leaves, apt groups), generic prefetch manifest walker, parallel size probe in verification, and manifest hash embedding for cache coherency.

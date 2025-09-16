@@ -108,6 +108,9 @@ Deliverables:
 - SBOM generation: `scripts/security/generate-sbom.sh` (CycloneDX for pip/npm + manual system list) → `sbom/`.
 - LICENSE aggregation script: detect distinct licenses, output `THIRD_PARTY_LICENSES.md`.
 - Ban `curl | bash` patterns; enforce detached download + verify + execute.
+- Archive integrity hardening: added `content_length` for all Eclipse archives, `verify-archives.sh` (quick/full), CI workflow `verify-archives.yml`.
+- Release bump automation: `update-eclipse-release.sh` to reset Eclipse artifact hashes/sizes for new releases.
+- Aggregated meta entry `eclipse-release-2025-09` for programmatic iteration over variants.
 Acceptance Criteria:
 - CI fails if any source referenced without checksum.
 - SBOM diff job highlights new components.
@@ -302,4 +305,110 @@ Progress snapshots appended here with timestamped mini-sections as work proceeds
 [2025-09-15T03:45Z] Phase 3 baseline: added sources validation script, enhanced checksum utility (verify_or_record), CI security-baseline job with non-strict hash check, checksum placeholders wired into Eclipse/VSCode installers, README updated.
 [2025-09-15T04:00Z] Phase 3 enhancements: lock-sources script added, SBOM generator now lists manifest packages (CycloneDX), CI strict-mode preview step, README locking workflow documented.
 [2025-09-15T04:10Z] Strict checksum enforcement activated: CI now runs validate-sources.sh --strict; README updated with mandatory hash policy.
+[2025-09-15T04:20Z] Added archive verification scripts (collect-content-lengths, verify-archives) + CI quick verify workflow.
+[2025-09-15T04:25Z] Populated precise Eclipse content_length values & corrected macOS aarch64 size; no mismatches post-fix.
+[2025-09-15T04:30Z] Added eclipse release meta entry + release bump script; README updated with Archive Integrity section.
+[2025-09-15T04:45Z] Phase 4 kickoff: added append-only ledger (hash chained) scripts/state/ledger.sh.
+[2025-09-15T04:50Z] Added rollback stub scripts/state/rollback.sh (npm -g + pip user uninstall prototype).
+[2025-09-15T04:55Z] Introduced offline utility scripts/utils/offline.sh with cached fetch abstraction.
+[2025-09-15T05:00Z] Implemented prefetch caching scripts/cache/prefetch.sh for eclipse archives.
+[2025-09-15T05:05Z] Integrated offline-aware fetch into verify-archives.sh (trans sketched for future generic use).
+[2025-09-16T17:15Z] Added manifest cache fingerprint & stale warning (offline.sh) to detect cache drift vs manifest.
+[2025-09-16T17:20Z] Enhanced rollback: default dry-run, added brew/apt listing, safer UX; extended help semantics.
+[2025-09-16T17:25Z] Generalized prefetch to all archives; skips meta/placeholder hashes; retains filter support.
+[2025-09-16T17:30Z] Parallel quick verification implemented (--concurrency) in verify-archives (HEAD size probes multi-process).
+[2025-09-16T17:40Z] Introduced structured logging layer: log-json utility + integration in verify-archives, prefetch, ledger record.
+[2025-09-16T17:50Z] Metrics summarizer (summarize-logs.sh) added producing counts & basic duration stats from JSONL.
+[2025-09-16T17:55Z] Guard workflow quick-guard.yml added (parallel quick verify + ledger integrity) for fast PR feedback.
+[2025-09-16T18:00Z] Logging robustness pass: fixed JSON escaping, concurrency logging, duration handling (pending final end-phase ms refinement).
+
+---
+## Forward Plan Addendum (Post Archive Integrity)
+
+### Completed (Reclassified)
+1. Parallel HEAD probes (verify-archives concurrency).
+2. Prefetch/cache skeleton + generalized archive support.
+3. Ledger hash chain + rollback stub.
+4. Unified JSON logging wrapper (initial slice) integrated into core scripts.
+
+### Immediate (Next Sprint Focus)
+1. verify-archives: add `--output-json <file>` summarizing per-artifact status (size_ok, hash_mismatch, etc.).
+2. Ensure reliable end-phase log event with precise duration_ms (portable ms helper) and attach artifact counts.
+3. Integrate metrics summarizer into CI (artifact upload + threshold gate placeholder).
+4. Introduce `scripts/utils/argparse.sh` (central flag parsing; migrate verify-archives first as exemplar).
+5. Add `--rebaseline-size <name|all>` to update only `content_length` after intentional upstream repack (hash unchanged) writing manifest patch.
+6. Embed manifest hash + original URL inside cache filename sidecar (e.g., `<sha>.meta`) for future drift/trust checks.
+7. Drift baseline snapshot generator: produce `baseline/archives.json` (name, sha256, content_length) consumed later by drift detector.
+
+### Near-Term (Phase 5/6 Bridge)
+8. Extend logging to course setup scripts (start/end + duration) feeding metrics.
+9. Add simple outlier detector (flag installs > configured ms) in summarizer output.
+10. Provide ledger verify step in CI guard (separate job) once ledger adoption widens.
+
+### Mid-Term
+11. Drift detector cron (compare live HEAD sizes & 304 ETag capture vs baseline).
+12. Plugin trust model (allowlist + optional GPG signature placeholder design doc).
+
+### Stretch
+13. Container images referencing manifest & cache layering.
+14. Upgrade assistant for manifest schema migrations.
+15. Security advisory feed placeholder ingestion & alerting integration.
+
+### Deferred / Nice-to-Have Later
+16. Rich TUI & remediation generator (Phase 8 scope) – postponed until core observability stable.
+17. Performance profiling graph mode (Phase 7) – hold until baseline metrics trending established.
+
+---
+## ⏸ Scope Stabilization (September 2025 Freeze)
+
+We are temporarily freezing expansion to advanced phases (6–10) to realign with the original student-focused mission stated in `README.md` and `guide.md`:
+
+Core Mission (from initial docs):
+- Fast cross-platform bootstrap (macOS/Linux/Windows+WSL)
+- Reliable project quickstarts (Python / Node.js + minimal Java & C++)
+- Environment management & health diagnostics
+- Backup & recovery workflows
+- Basic integrity / safety (checksums for external archives)
+
+Recent work introduced forward-looking platform features (ledger, observability, drift groundwork). These are valuable but now considered "Platform Enhancements" rather than baseline requirements.
+
+### Stabilization Goals (Complete Before Returning to Core Scripts)
+1. Verification JSON accuracy: include quick concurrency artifact results (currently empty array) – finish and mark script stable.
+2. End-phase metrics: consistent duration_ms + artifact counts (success, fail, skipped) logged & (optionally) exported.
+3. Minimal argparse helper (`scripts/utils/argparse.sh`) ONLY for `verify-archives.sh` to reduce flag parsing churn; defer broad migration.
+4. Baseline snapshot (`baseline/archives.json`) already generated – wire a simple drift check stub (size/hash mismatch notice, non-fatal) and stop there.
+5. Mark experimental components: add headers/comments in `ledger.sh`, `rollback.sh`, `prefetch.sh` noting "EXPERIMENTAL - subject to change".
+6. Documentation: Insert a short "Platform Features (Experimental)" section in README pointing to roadmap instead of detailing internals.
+
+After these 6 stabilization items: pause further Phase 5+ build-out and resume improvements to the core setup & course scripts (manifest-driven refactors still outstanding in some areas, plus student usability polish).
+
+### Parked (Will Resume Later)
+- Full profile modular system (Phase 6)
+- Plugin loader & trust model
+- Performance batching & profiling modes (Phase 7)
+- Rich TUI / remediation generator (Phase 8)
+- Drift detector automation & scheduled jobs (Phase 9)
+- Container images & release automation (Phase 10)
+
+### Rationale
+This freeze prevents dilution of effort and ensures the observable/security scaffolding does not overshadow the primary educational value: rapid, dependable environment setup for students with clear, concise tooling.
+
+### Exit Criteria for Freeze
+- All 6 stabilization goals marked done in changelog snapshot.
+- README updated with experimental disclaimer & trimmed advanced detail.
+- No open TODOs inside security/state scripts referencing "FIXME for JSON accuracy" or similar.
+
+Once criteria met, create a dated snapshot section here and reopen Phase 6 items in a new "Post-Freeze" subsection.
+
+### Freeze Progress Snapshot
+`[2025-09-16T18:30Z]` Stabilization items 1,2,4,5,6 completed:
+- (1) Quick concurrency JSON now populated with artifacts.
+- (2) End-phase metrics (duration_ms, count) added with portable ms clock.
+- (4) Drift baseline + ensure-baseline + drift-check stub integrated (non-fatal in guard workflow).
+- (5) Experimental headers added to ledger, rollback, prefetch.
+- (6) README experimental section added.
+Pending / Deferred intentionally: (3) argparse helper (will implement after returning to core script refactors unless flag parsing churn resumes).
+Next action: Resume core manifest-driven refactors & student usability polish; argparse helper tracked but not blocking freeze exit.
+
+
 ```
