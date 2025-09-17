@@ -17,9 +17,6 @@ param(
 # Import required modules
 Import-Module DISM -ErrorAction SilentlyContinue
 
-# Global flag for Parallels/ARM64 environment
-$script:IsParallelsARM64 = $false
-
 # Check for pending reboot
 function Test-PendingReboot {
     $pendingReboot = $false
@@ -49,35 +46,8 @@ function Test-Administrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# Check if running in Parallels on Apple Silicon (where WSL2 won't work)
-function Test-ParallelsAppleSilicon {
-    try {
-        # Check for Parallels virtual hardware
-        $systemInfo = Get-WmiObject -Class Win32_ComputerSystem
-        $manufacturer = $systemInfo.Manufacturer
-        $model = $systemInfo.Model
-        
-        # Check if we're in Parallels
-        $isParallels = $manufacturer -like "*Parallels*" -or $model -like "*Parallels*"
-        
-        if ($isParallels) {
-            # Check for Apple Silicon architecture
-            $processor = Get-WmiObject -Class Win32_Processor
-            $architecture = $processor.Architecture
-            
-            # Architecture 12 = ARM64, which indicates Apple Silicon
-            if ($architecture -eq 12) {
-                return $true
-            }
-        }
-        
-        return $false
-    }
-    catch {
-        # If we can't detect, assume it's not the problematic scenario
-        return $false
-    }
-}
+# Check for pending reboot
+function Test-PendingReboot {
 
 # Logging functions
 function Write-Info {
@@ -426,15 +396,6 @@ function Install-WindowsTools {
     Write-Host ""
     Write-Success "Windows tools installation completed: $successCount successful, $failCount failed"
     
-    if ($script:IsParallelsARM64) {
-        Write-Host ""
-        Write-Host "Parallels ARM64 Environment Notes:" -ForegroundColor Cyan
-        Write-Host "- All installed tools work perfectly in this environment" -ForegroundColor Green
-        Write-Host "- VS Code, Git, Python, Node.js, and Java all have excellent performance" -ForegroundColor Green
-        Write-Host "- Use Docker Desktop for container development" -ForegroundColor Green
-        Write-Host "- Consider Remote SSH extension for Linux development" -ForegroundColor Yellow
-    }
-    
     if ($failCount -gt 0) {
         Write-Warning "Some tools failed to install. This may be due to pending system reboot."
         Write-Info "After restarting your computer, you can retry failed installations with:"
@@ -660,28 +621,95 @@ function Uninstall-DevEnvironment {
         Write-Warning "Could not remove Chocolatey completely"
     }
 
-    # Remove WSL2 and Ubuntu (if not in Parallels ARM64)
-    if (!$script:IsParallelsARM64) {
-        Write-Info "Removing WSL2 and Ubuntu..."
-        try {
-            # Check if WSL is available before trying to remove
-            if (Get-Command wsl -ErrorAction SilentlyContinue) {
-                # Remove Ubuntu
-                wsl --unregister Ubuntu 2>$null
-                wsl --unregister Ubuntu-22.04 2>$null
-                Write-Success "Removed Ubuntu WSL"
+    # Remove WSL2 and Ubuntu
+    Write-Info "Checking WSL2 and Ubuntu distributions..."
+    try {
+        # Check if WSL is available before trying to remove
+        if (Get-Command wsl -ErrorAction SilentlyContinue) {
+            # List all installed WSL distributions
+            $wslList = wsl --list --verbose 2>$null
+            if ($wslList) {
+                Write-Info "Current WSL distributions:"
+                $wslList | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+                
+                # Check if any Ubuntu distributions exist
+                $ubuntuDistros = @("Ubuntu", "Ubuntu-22.04", "Ubuntu-20.04", "Ubuntu-18.04", "ubuntu")
+                $foundUbuntu = @()
+                
+                foreach ($distro in $ubuntuDistros) {
+                    $checkResult = wsl --list --quiet 2>$null | Where-Object { $_ -eq $distro }
+                    if ($checkResult) {
+                        $foundUbuntu += $distro
+                    }
+                }
+                
+                if ($foundUbuntu.Count -gt 0) {
+                    Write-Host ""
+                    Write-Warning "Found Ubuntu WSL distribution(s): $($foundUbuntu -join ', ')"
+                    Write-Host "⚠️  WARNING: Removing Ubuntu distributions will DELETE ALL DATA inside them!" -ForegroundColor Red
+                    Write-Host "This includes:" -ForegroundColor Yellow
+                    Write-Host "- Your home directory and all files" -ForegroundColor Yellow
+                    Write-Host "- Installed packages and configurations" -ForegroundColor Yellow
+                    Write-Host "- Any development projects stored in WSL" -ForegroundColor Yellow
+                    Write-Host ""
+                    Write-Host "If you have important data, consider backing it up first:" -ForegroundColor Cyan
+                    Write-Host "- Copy files to Windows: cp -r ~/important-folder /mnt/c/backup/" -ForegroundColor Cyan
+                    Write-Host "- Export configurations and package lists" -ForegroundColor Cyan
+                    Write-Host ""
+                    
+                    $removeUbuntu = Read-Host "Do you want to remove Ubuntu WSL distributions? This CANNOT be undone! (type 'DELETE' to confirm)"
+                    
+                    if ($removeUbuntu -eq "DELETE") {
+                        Write-Info "Removing Ubuntu distributions..."
+                        $removedDistros = @()
+                        
+                        foreach ($distro in $foundUbuntu) {
+                            $result = wsl --unregister $distro 2>&1
+                            if ($LASTEXITCODE -eq 0) {
+                                $removedDistros += $distro
+                                Write-Success "Removed WSL distribution: $distro"
+                            } else {
+                                Write-Warning "Could not remove $distro`: $result"
+                            }
+                        }
+                        
+                        if ($removedDistros.Count -gt 0) {
+                            Write-Success "Successfully removed $($removedDistros.Count) Ubuntu distribution(s): $($removedDistros -join ', ')"
+                        }
+                    } else {
+                        Write-Info "Skipping Ubuntu distribution removal (user chose to keep them)"
+                        Write-Host "Note: WSL features will still be disabled, but distributions will remain" -ForegroundColor Yellow
+                    }
+                } else {
+                    Write-Info "No Ubuntu distributions found to remove"
+                }
+                
+                # Show remaining distributions
+                $remainingList = wsl --list --verbose 2>$null
+                if ($remainingList -and ($remainingList | Measure-Object).Count -gt 1) {
+                    Write-Info "Remaining WSL distributions:"
+                    $remainingList | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+                }
+            } else {
+                Write-Info "No WSL distributions found"
             }
+        } else {
+            Write-Info "WSL command not available (may not be installed)"
+        }
 
-            # Disable WSL features
-            dism.exe /online /disable-feature /featurename:Microsoft-Windows-Subsystem-Linux /norestart
-            dism.exe /online /disable-feature /featurename:VirtualMachinePlatform /norestart
+        # Disable WSL features
+        Write-Info "Disabling WSL features..."
+        $dismResult1 = dism.exe /online /disable-feature /featurename:Microsoft-Windows-Subsystem-Linux /norestart 2>&1
+        $dismResult2 = dism.exe /online /disable-feature /featurename:VirtualMachinePlatform /norestart 2>&1
+        
+        if ($LASTEXITCODE -eq 0) {
             Write-Success "Disabled WSL2 features"
+        } else {
+            Write-Warning "Could not disable WSL features (may not be enabled): $dismResult1 $dismResult2"
         }
-        catch {
-            Write-Warning "Could not remove WSL2/Ubuntu (may not be installed)"
-        }
-    } else {
-        Write-Info "Skipping WSL2 removal (was not installed in Parallels ARM64 mode)"
+    }
+    catch {
+        Write-Warning "Error during WSL2/Ubuntu removal: $($_.Exception.Message)"
     }
 
     # Clean up environment variables
