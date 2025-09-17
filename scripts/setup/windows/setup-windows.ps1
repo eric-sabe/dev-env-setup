@@ -223,12 +223,37 @@ function Install-UbuntuWSL {
 
     Write-Info "Installing Ubuntu WSL2..."
 
-    # Check if WSL is working
+    # Check if WSL is working and VM Platform is ready
     try {
+        # Test if WSL is functional
         $wslStatus = wsl --status 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "WSL is not ready yet. Please restart your computer and run this script again."
+            Write-Info "This is normal after the first reboot - WSL features need time to fully initialize."
+            return
+        }
     } catch {
         Write-Warning "WSL is not ready. Please restart your computer and run this script again."
         return
+    }
+
+    # Check if Virtual Machine Platform is actually ready
+    try {
+        # Try to query hypervisor - this will fail if VM Platform isn't ready
+        $hypervisorRunning = Get-WmiObject -Class Win32_ComputerSystem | Select-Object -ExpandProperty HypervisorPresent
+        if (-not $hypervisorRunning) {
+            Write-Warning "Virtual Machine Platform is enabled but not fully active yet."
+            Write-Info "This usually means you need one more restart for virtualization to be ready."
+            Write-Info "Please restart your computer again and run this script to complete Ubuntu installation."
+            
+            $restart = Read-Host "Would you like to restart now? (y/N)"
+            if ($restart -eq "y" -or $restart -eq "Y") {
+                Restart-Computer -Force
+            }
+            return
+        }
+    } catch {
+        Write-Info "Could not verify hypervisor status, proceeding with installation..."
     }
 
     # Install Ubuntu from Microsoft Store
@@ -246,8 +271,26 @@ function Install-UbuntuWSL {
         # Method 1: Use wsl --install
         try {
             wsl --install -d Ubuntu-22.04
-            Write-Success "Ubuntu WSL2 installed via wsl --install"
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "Ubuntu WSL2 installed via wsl --install"
+            } else {
+                throw "wsl --install failed with exit code $LASTEXITCODE"
+            }
         } catch {
+            Write-Warning "wsl --install failed: $($_.Exception.Message)"
+            
+            # Check for specific virtualization error
+            if ($_.Exception.Message -match "0x80370102") {
+                Write-Warning "Error 0x80370102 detected - Virtual Machine Platform needs another restart to fully activate."
+                Write-Info "Please restart your computer one more time and run this script again."
+                
+                $restart = Read-Host "Would you like to restart now? (y/N)"
+                if ($restart -eq "y" -or $restart -eq "Y") {
+                    Restart-Computer -Force
+                }
+                return
+            }
+            
             # Method 2: Manual download and install
             Write-Info "Trying alternative Ubuntu installation method..."
             $ubuntuUrl = "https://aka.ms/wslubuntu2204"
@@ -267,8 +310,14 @@ function Install-UbuntuWSL {
         Write-Info "You can start Ubuntu by running: wsl"
     }
     catch {
-        Write-Warning "Ubuntu installation failed. You can install it manually from Microsoft Store"
-        Write-Info "Search for 'Ubuntu 22.04 LTS' in Microsoft Store"
+        if ($_.Exception.Message -match "0x80370102") {
+            Write-Warning "Virtualization error detected. Virtual Machine Platform needs to be fully activated."
+            Write-Info "Please restart your computer again and run this script to complete the installation."
+        } else {
+            Write-Warning "Ubuntu installation failed: $($_.Exception.Message)"
+            Write-Info "You can install Ubuntu manually from Microsoft Store"
+            Write-Info "Search for 'Ubuntu 22.04 LTS' in Microsoft Store"
+        }
     }
 }
 
@@ -281,23 +330,76 @@ function Install-WindowsTools {
 
     Write-Info "Installing Windows development tools..."
 
-    # Install Chocolatey if not present
-    if (!(Get-Command choco -ErrorAction SilentlyContinue)) {
+    # Install Chocolatey if not present or corrupted
+    $chocoWorking = $false
+    try {
+        # Test if Chocolatey is working properly
+        $chocoTest = choco --version 2>$null
+        if ($LASTEXITCODE -eq 0 -and $chocoTest) {
+            $chocoWorking = $true
+            Write-Success "Chocolatey is already installed and working"
+        }
+    } catch {
+        $chocoWorking = $false
+    }
+    
+    if (-not $chocoWorking) {
+        # Check for corrupted installation
+        $chocoFolderExists = Test-Path "$env:ProgramData\chocolatey"
+        if ($chocoFolderExists) {
+            Write-Warning "Found existing Chocolatey installation that is not working properly"
+            Write-Info "Cleaning up corrupted Chocolatey installation..."
+            
+            # Remove corrupted installation
+            try {
+                Get-Process | Where-Object { $_.ProcessName -like "*choco*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 2
+                
+                $corruptedPath = "$env:ProgramData\chocolatey"
+                Get-ChildItem -Path $corruptedPath -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                    $_.Attributes = "Normal"
+                }
+                Remove-Item -Path $corruptedPath -Recurse -Force -ErrorAction Stop
+                Write-Success "Removed corrupted Chocolatey installation"
+            } catch {
+                Write-Warning "Could not fully remove corrupted installation: $($_.Exception.Message)"
+                Write-Info "You may need to manually delete $env:ProgramData\chocolatey before continuing"
+                return
+            }
+        }
+        
         Write-Info "Installing Chocolatey..."
         Set-ExecutionPolicy Bypass -Scope Process -Force
         [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-        Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-        # Try to import Chocolatey profile to enable refreshenv in current session
-        if ($env:ChocolateyInstall) {
-            $chocoProfile = Join-Path $env:ChocolateyInstall 'helpers\chocolateyProfile.psm1'
-            if (Test-Path $chocoProfile) {
-                Import-Module $chocoProfile -ErrorAction SilentlyContinue
+        
+        try {
+            Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+            
+            # Verify installation succeeded
+            Start-Sleep -Seconds 3
+            $chocoTest = choco --version 2>$null
+            if ($LASTEXITCODE -eq 0 -and $chocoTest) {
+                Write-Success "Chocolatey installed successfully"
+                
+                # Try to import Chocolatey profile to enable refreshenv in current session
+                if ($env:ChocolateyInstall) {
+                    $chocoProfile = Join-Path $env:ChocolateyInstall 'helpers\chocolateyProfile.psm1'
+                    if (Test-Path $chocoProfile) {
+                        Import-Module $chocoProfile -ErrorAction SilentlyContinue
+                    }
+                }
+                if (Get-Command refreshenv -ErrorAction SilentlyContinue) {
+                    refreshenv
+                } else {
+                    Write-Info "Please restart PowerShell or run: Import-Module `$env:ChocolateyInstall\\helpers\\chocolateyProfile.psm1; refreshenv"
+                }
+            } else {
+                throw "Chocolatey installation verification failed"
             }
-        }
-        if (Get-Command refreshenv -ErrorAction SilentlyContinue) {
-            refreshenv
-        } else {
-            Write-Info "Chocolatey installed. Open a new terminal to refresh PATH or run: Import-Module `$env:ChocolateyInstall\\helpers\\chocolateyProfile.psm1; refreshenv"
+        } catch {
+            Write-Error "Failed to install Chocolatey: $($_.Exception.Message)"
+            Write-Info "Please install Chocolatey manually from https://chocolatey.org/install"
+            return
         }
     }
 
@@ -603,19 +705,68 @@ function Uninstall-DevEnvironment {
         }
     }
 
-    # Remove Chocolatey itself
-    Write-Info "Removing Chocolatey..."
+    # Remove Chocolatey itself (comprehensive cleanup)
+    Write-Info "Removing Chocolatey completely..."
     try {
-        $chocoPath = "$env:ChocolateyInstall"
-        if (Test-Path $chocoPath) {
-            Remove-Item -Path $chocoPath -Recurse -Force -ErrorAction SilentlyContinue
-            Write-Success "Removed Chocolatey"
+        # Stop any running Chocolatey processes
+        Get-Process | Where-Object { $_.ProcessName -like "*choco*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+        
+        # Remove Chocolatey directories
+        $chocoLocations = @(
+            "$env:ChocolateyInstall",
+            "$env:ProgramData\chocolatey",
+            "$env:ALLUSERSPROFILE\chocolatey",
+            "$env:SystemDrive\ProgramData\chocolatey"
+        )
+        
+        $removedCount = 0
+        foreach ($location in $chocoLocations) {
+            if ($location -and (Test-Path $location)) {
+                try {
+                    # Take ownership and remove read-only attributes
+                    Get-ChildItem -Path $location -Recurse -Force | ForEach-Object {
+                        $_.Attributes = "Normal"
+                    }
+                    Remove-Item -Path $location -Recurse -Force -ErrorAction Stop
+                    Write-Success "Removed Chocolatey from: $location"
+                    $removedCount++
+                } catch {
+                    Write-Warning "Could not fully remove $location`: $($_.Exception.Message)"
+                }
+            }
+        }
+        
+        # Remove Chocolatey from environment variables
+        $currentPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+        if ($currentPath) {
+            $chocoPathPatterns = @(
+                "$env:ChocolateyInstall\bin",
+                "$env:ProgramData\chocolatey\bin",
+                "$env:ALLUSERSPROFILE\chocolatey\bin"
+            )
+            
+            foreach ($pattern in $chocoPathPatterns) {
+                if ($pattern) {
+                    $currentPath = $currentPath -replace [regex]::Escape($pattern + ";"), ""
+                    $currentPath = $currentPath -replace [regex]::Escape($pattern), ""
+                }
+            }
+            [Environment]::SetEnvironmentVariable("Path", $currentPath, "Machine")
+        }
+        
+        # Remove ChocolateyInstall environment variable
+        [Environment]::SetEnvironmentVariable("ChocolateyInstall", $null, "Machine")
+        [Environment]::SetEnvironmentVariable("ChocolateyInstall", $null, "User")
+        
+        if ($removedCount -gt 0) {
+            Write-Success "Chocolatey completely removed from $removedCount location(s)"
         } else {
-            Write-Info "Chocolatey not found"
+            Write-Info "No Chocolatey installation found to remove"
         }
     }
     catch {
-        Write-Warning "Could not remove Chocolatey completely"
+        Write-Warning "Could not remove Chocolatey completely: $($_.Exception.Message)"
+        Write-Info "You may need to manually delete C:\ProgramData\chocolatey if it still exists"
     }
 
     # Remove WSL2 and Ubuntu
@@ -794,7 +945,23 @@ function Install-DevEnvironment {
 
     # Install all components
     Write-Info "Installing full development environment..."
+    
+    # Enable WSL2 first (may require restart)
     Enable-WSL2
+    
+    # Check if we just enabled WSL features and need a restart
+    if (Test-PendingReboot) {
+        Write-Warning "Windows features were just enabled and require a restart to activate."
+        Write-Info "After restart, run this script again to complete Ubuntu and tools installation."
+        Write-Host ""
+        Write-Host "Next steps after restart:" -ForegroundColor Yellow
+        Write-Host "1. Run this script again as Administrator: .\setup-windows.ps1" -ForegroundColor Yellow
+        Write-Host "2. Complete Ubuntu setup when prompted" -ForegroundColor Yellow
+        Write-Host "3. Install VS Code extensions for your languages" -ForegroundColor Yellow
+        return
+    }
+    
+    # Continue with the rest of the installation
     Install-UbuntuWSL
     Install-WindowsTools
     Configure-WindowsTerminal
@@ -811,11 +978,10 @@ function Install-DevEnvironment {
     Write-Host "Windows Development Environment Setup Complete" -ForegroundColor Green
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor Yellow
-    Write-Host "1. Restart your computer to complete WSL2 installation"
-    Write-Host "2. Launch Ubuntu from Start Menu and complete setup"
-    Write-Host "3. Run the WSL setup script: wsl bash ~/dev-scripts/setup/windows/setup-wsl.sh"
-    Write-Host "4. Install VS Code extensions for your languages"
-    Write-Host "5. Use the quickstart scripts to create new projects"
+    Write-Host "1. Launch Ubuntu from Start Menu and complete setup" -ForegroundColor Yellow
+    Write-Host "2. Run the WSL setup script: wsl bash ~/dev-scripts/setup/windows/setup-wsl.sh" -ForegroundColor Yellow
+    Write-Host "3. Install VS Code extensions for your languages" -ForegroundColor Yellow
+    Write-Host "4. Use the quickstart scripts to create new projects" -ForegroundColor Yellow
 
     Write-Host ""
     Write-Host "Happy coding!" -ForegroundColor Blue
