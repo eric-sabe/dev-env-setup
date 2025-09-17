@@ -18,7 +18,7 @@ param(
 Import-Module DISM -ErrorAction SilentlyContinue
 
 # Global flag for Parallels/ARM64 environment
-$IsParallelsARM64 = $false
+$script:IsParallelsARM64 = $false
 
 # Check for pending reboot
 function Test-PendingReboot {
@@ -98,6 +98,21 @@ function Write-Warning {
 function Write-Error {
     param([string]$Message)
     Write-Host "[ERROR] $Message" -ForegroundColor Red
+}
+
+# Check Windows version
+function Test-WindowsVersion {
+    $osInfo = Get-ComputerInfo
+    # Use OS build number for reliable comparison (2004 == build 19041)
+    $build = 0
+    try { $build = [int]$osInfo.OsBuildNumber } catch { $build = 0 }
+
+    if ($build -lt 19041) {
+        Write-Error "Windows 10 build 19041 (version 2004) or Windows 11 required for WSL2. Current build: $build"
+        exit 1
+    }
+
+    Write-Success "Windows build $build detected"
 }
 
 # Check if nested virtualization is available
@@ -236,6 +251,16 @@ nestedVirtualization=true
             Write-Info "Developer Mode may need to be enabled manually in Windows Settings"
         }
     }
+
+    # Set WSL2 as default version (only if WSL is already working)
+    try {
+        wsl --set-default-version 2
+        Write-Success "WSL2 set as default version"
+    } catch {
+        Write-Info "WSL not ready yet. Will set default version after restart."
+    }
+
+    Write-Success "WSL2 features enabled"
 }
 
 # Install Ubuntu WSL2
@@ -811,6 +836,7 @@ function Install-DevEnvironment {
             Write-Info "Continuing with WSL2 installation..."
             Write-Info "Remember to enable nested virtualization in Parallels settings for WSL2 to work!"
         }
+    }
 
     # Install components (conditionally based on environment)
     if ($script:IsParallelsARM64) {
