@@ -10,6 +10,28 @@ param(
 # Import required modules
 Import-Module DISM -ErrorAction SilentlyContinue
 
+# Check for pending reboot
+function Test-PendingReboot {
+    $pendingReboot = $false
+    
+    # Check Windows Update reboot flag
+    if (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired" -ErrorAction SilentlyContinue) {
+        $pendingReboot = $true
+    }
+    
+    # Check Component Based Servicing reboot flag
+    if (Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending" -ErrorAction SilentlyContinue) {
+        $pendingReboot = $true
+    }
+    
+    # Check for pending file rename operations
+    if (Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name "PendingFileRenameOperations" -ErrorAction SilentlyContinue) {
+        $pendingReboot = $true
+    }
+    
+    return $pendingReboot
+}
+
 # Check if running as administrator
 function Test-Administrator {
     $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -188,46 +210,89 @@ function Install-WindowsTools {
         }
     }
 
+    # Check for pending reboot before installing tools
+    if (Test-PendingReboot) {
+        Write-Warning "A system reboot is pending. Some installations may fail."
+        Write-Info "Consider restarting your computer and running this script again for best results."
+    }
+
     # Install development tools via Chocolatey
     $tools = @(
-        "git",
-        "vscode",
-        "eclipse",
-        "python",
-        "nodejs",
-        "openjdk",
-        "maven",
-        "gradle",
-        "docker-desktop",
-        "postman",
-        "gitkraken",
-        "microsoft-windows-terminal",
-        "powershell"
+        @{name="git"; fallback=$null; description="Git version control"},
+        @{name="vscode"; fallback=$null; description="Visual Studio Code editor"},
+        @{name="eclipse"; fallback="eclipse-java"; description="Eclipse IDE"},
+        @{name="python"; fallback=$null; description="Python programming language"},
+        @{name="nodejs"; fallback=$null; description="Node.js runtime"},
+        @{name="openjdk"; fallback="temurin"; description="OpenJDK Java"},
+        @{name="maven"; fallback=$null; description="Maven build tool"},
+        @{name="gradle"; fallback=$null; description="Gradle build tool"},
+        @{name="docker-desktop"; fallback=$null; description="Docker Desktop"},
+        @{name="postman"; fallback=$null; description="Postman API testing"},
+        @{name="gitkraken"; fallback=$null; description="GitKraken Git GUI"},
+        @{name="microsoft-windows-terminal"; fallback="microsoft-terminal"; description="Windows Terminal"},
+        @{name="powershell"; fallback="powershell-core"; description="PowerShell Core"}
     )
 
+    $successCount = 0
+    $failCount = 0
+
     foreach ($tool in $tools) {
-        Write-Info "Installing $tool..."
+        $toolName = $tool.name
+        $fallback = $tool.fallback
+        $description = $tool.description
+        
+        Write-Info "Installing $toolName ($description)..."
+        
+        $installed = $false
+        
+        # Try main package first
         try {
-            choco install $tool -y
-            Write-Success "$tool installed"
+            $result = choco install $toolName -y --limit-output
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "$toolName installed successfully"
+                $installed = $true
+                $successCount++
+            } else {
+                throw "Chocolatey exit code: $LASTEXITCODE"
+            }
         }
         catch {
-            if ($tool -eq "eclipse") {
-                Write-Info "Trying Eclipse fallback package 'eclipse-java'..."
+            Write-Warning "Failed to install $toolName"
+            
+            # Try fallback if available
+            if ($fallback) {
+                Write-Info "Trying fallback package '$fallback'..."
                 try {
-                    choco install eclipse-java -y
-                    Write-Success "eclipse-java installed"
+                    $result = choco install $fallback -y --limit-output
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Success "$fallback installed successfully"
+                        $installed = $true
+                        $successCount++
+                    } else {
+                        throw "Chocolatey exit code: $LASTEXITCODE"
+                    }
                 }
                 catch {
-                    Write-Warning "Failed to install eclipse and eclipse-java"
+                    Write-Warning "Failed to install both $toolName and $fallback"
+                    $failCount++
                 }
             } else {
-                Write-Warning "Failed to install $tool"
+                $failCount++
             }
+        }
+        
+        if (!$installed) {
+            Write-Info "You can install $toolName manually later using: choco install $toolName"
         }
     }
 
-    Write-Success "Windows tools installation completed"
+    Write-Host ""
+    Write-Success "Windows tools installation completed: $successCount successful, $failCount failed"
+    if ($failCount -gt 0) {
+        Write-Warning "Some tools failed to install. This may be due to pending system reboot."
+        Write-Info "After restarting your computer, you can retry failed installations with:"
+        Write-Info "choco install <package-name> -y"
+    }
 }
 
 # Configure Windows Terminal
