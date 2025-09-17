@@ -268,20 +268,50 @@ function Install-UbuntuWSL {
         # Try different Ubuntu installation methods
         Write-Info "Attempting to install Ubuntu..."
         
-        # Method 1: Use wsl --install
+        # Method 1: Use modern wsl --install with Ubuntu (latest approach)
         try {
-            wsl --install -d Ubuntu-22.04
+            # First try with just "Ubuntu" which gets the latest version
+            $wslOutput = wsl --install -d Ubuntu 2>&1
             if ($LASTEXITCODE -eq 0) {
                 Write-Success "Ubuntu WSL2 installed via wsl --install"
             } else {
-                throw "wsl --install failed with exit code $LASTEXITCODE"
+                # Check if the output contains the virtualization error
+                if ($wslOutput -match "0x80370102|WslRegisterDistribution failed") {
+                    Write-Warning "Virtualization error detected (0x80370102) - Virtual Machine Platform needs another restart."
+                    Write-Host ""
+                    Write-Host "WARNING: The Virtual Machine Platform is enabled but not fully activated yet." -ForegroundColor Yellow
+                    Write-Host "This is common after the first restart following WSL2 feature installation." -ForegroundColor Yellow
+                    Write-Host ""
+                    Write-Host "Solution: Restart your computer one more time to fully activate virtualization." -ForegroundColor Cyan
+                    Write-Host ""
+                    
+                    $restart = Read-Host "Would you like to restart now? (y/N)"
+                    if ($restart -eq "y" -or $restart -eq "Y") {
+                        Write-Info "Restarting computer to activate Virtual Machine Platform..."
+                        Restart-Computer -Force
+                    } else {
+                        Write-Info "Please restart your computer manually and run this script again."
+                        Write-Info "After restart, Ubuntu should install successfully."
+                    }
+                    return
+                } else {
+                    # Try fallback to Ubuntu-22.04 if Ubuntu didn't work
+                    Write-Info "Trying with Ubuntu-22.04 distribution..."
+                    $wslOutput2 = wsl --install -d Ubuntu-22.04 2>&1
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Success "Ubuntu WSL2 installed via wsl --install (Ubuntu-22.04)"
+                    } else {
+                        throw "wsl --install failed for both Ubuntu and Ubuntu-22.04. Output: $wslOutput2"
+                    }
+                }
             }
         } catch {
-            Write-Warning "wsl --install failed: $($_.Exception.Message)"
+            $errorMsg = $_.Exception.Message
+            Write-Warning "wsl --install failed: $errorMsg"
             
-            # Check for specific virtualization error
-            if ($_.Exception.Message -match "0x80370102") {
-                Write-Warning "Error 0x80370102 detected - Virtual Machine Platform needs another restart to fully activate."
+            # Check for specific virtualization error in the exception message
+            if ($errorMsg -match "0x80370102|WslRegisterDistribution failed") {
+                Write-Warning "Virtualization error detected - Virtual Machine Platform needs another restart to fully activate."
                 Write-Info "Please restart your computer one more time and run this script again."
                 
                 $restart = Read-Host "Would you like to restart now? (y/N)"
@@ -291,19 +321,68 @@ function Install-UbuntuWSL {
                 return
             }
             
-            # Method 2: Manual download and install
-            Write-Info "Trying alternative Ubuntu installation method..."
-            $ubuntuUrl = "https://aka.ms/wslubuntu2204"
-            $ubuntuPath = "$env:TEMP\Ubuntu2204.appx"
+            # Method 2: Try Microsoft Store approach (more modern than AppX)
+            Write-Info "Trying Microsoft Store installation method..."
             
-            Write-Info "Downloading Ubuntu 22.04..."
-            Invoke-WebRequest -Uri $ubuntuUrl -OutFile $ubuntuPath
-            
-            Write-Info "Installing Ubuntu 22.04..."
-            Add-AppxPackage -Path $ubuntuPath
-            
-            Remove-Item $ubuntuPath -ErrorAction SilentlyContinue
-            Write-Success "Ubuntu WSL2 installed via manual download"
+            try {
+                # Try using winget to install Ubuntu from Microsoft Store
+                if (Get-Command winget -ErrorAction SilentlyContinue) {
+                    Write-Info "Installing Ubuntu via Windows Package Manager (winget)..."
+                    $wingetResult = winget install Canonical.Ubuntu 2>&1
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Success "Ubuntu installed via winget"
+                    } else {
+                        throw "winget installation failed: $wingetResult"
+                    }
+                } else {
+                    # Fallback: Try to launch Microsoft Store Ubuntu page
+                    Write-Info "Opening Microsoft Store to install Ubuntu..."
+                    Write-Info "Please install 'Ubuntu 22.04 LTS' from the Microsoft Store that opens"
+                    
+                    # Open Microsoft Store to Ubuntu page
+                    Start-Process "ms-windows-store://pdp/?ProductId=9PN20MSR04DW"
+                    
+                    Write-Host ""
+                    Write-Host "Please follow these steps:" -ForegroundColor Yellow
+                    Write-Host "1. Click 'Install' in the Microsoft Store" -ForegroundColor Yellow
+                    Write-Host "2. Wait for the download and installation to complete" -ForegroundColor Yellow
+                    Write-Host "3. Click 'Open' or launch Ubuntu from Start Menu" -ForegroundColor Yellow
+                    Write-Host "4. Complete the Ubuntu setup (username/password)" -ForegroundColor Yellow
+                    Write-Host ""
+                    
+                    $continueSetup = Read-Host "Press Enter after Ubuntu installation is complete, or type 'skip' to continue without Ubuntu"
+                    if ($continueSetup -eq "skip") {
+                        Write-Warning "Skipping Ubuntu installation - you can install it manually later"
+                        return
+                    }
+                    
+                    Write-Success "Ubuntu installation completed via Microsoft Store"
+                }
+                
+                # Test if the distribution can actually start
+                Write-Info "Testing Ubuntu installation..."
+                $testResult = wsl -d Ubuntu-22.04 --exec echo "test" 2>&1
+                if ($LASTEXITCODE -ne 0 -and $testResult -match "0x80370102") {
+                    Write-Warning "Ubuntu installed but cannot start due to virtualization error (0x80370102)"
+                    Write-Host ""
+                    Write-Host "WARNING: Virtual Machine Platform needs one more restart to fully activate." -ForegroundColor Yellow
+                    Write-Host ""
+                    
+                    $restart = Read-Host "Restart now to activate virtualization? (y/N)"
+                    if ($restart -eq "y" -or $restart -eq "Y") {
+                        Write-Info "Restarting to activate Virtual Machine Platform..."
+                        Restart-Computer -Force
+                    } else {
+                        Write-Info "Please restart manually and run Ubuntu from Start Menu to complete setup."
+                    }
+                    return
+                }
+            } catch {
+                Write-Warning "Alternative installation method also failed: $($_.Exception.Message)"
+                Write-Info "Ubuntu installation requires Virtual Machine Platform to be fully active."
+                Write-Info "Please restart your computer and try again."
+                return
+            }
         }
 
         Write-Info "Please complete the Ubuntu setup (username/password) when prompted"
@@ -794,7 +873,7 @@ function Uninstall-DevEnvironment {
                 if ($foundUbuntu.Count -gt 0) {
                     Write-Host ""
                     Write-Warning "Found Ubuntu WSL distribution(s): $($foundUbuntu -join ', ')"
-                    Write-Host "⚠️  WARNING: Removing Ubuntu distributions will DELETE ALL DATA inside them!" -ForegroundColor Red
+                    Write-Host "WARNING: Removing Ubuntu distributions will DELETE ALL DATA inside them!" -ForegroundColor Red
                     Write-Host "This includes:" -ForegroundColor Yellow
                     Write-Host "- Your home directory and all files" -ForegroundColor Yellow
                     Write-Host "- Installed packages and configurations" -ForegroundColor Yellow
