@@ -125,7 +125,7 @@ function Install-WindowsTools {
         if (Get-Command refreshenv -ErrorAction SilentlyContinue) {
             refreshenv
         } else {
-            Write-Info "Chocolatey installed. Open a new terminal to refresh PATH or run: `Import-Module $env:ChocolateyInstall\\helpers\\chocolateyProfile.psm1; refreshenv`"
+            Write-Info "Chocolatey installed. Open a new terminal to refresh PATH or run: Import-Module `$env:ChocolateyInstall\\helpers\\chocolateyProfile.psm1; refreshenv"
         }
     }
 
