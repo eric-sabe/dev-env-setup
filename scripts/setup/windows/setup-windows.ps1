@@ -38,14 +38,16 @@ function Write-Error {
 # Check Windows version
 function Test-WindowsVersion {
     $osInfo = Get-ComputerInfo
-    $version = $osInfo.WindowsVersion
+    # Use OS build number for reliable comparison (2004 == build 19041)
+    $build = 0
+    try { $build = [int]$osInfo.OsBuildNumber } catch { $build = 0 }
 
-    if ($version -lt 2004) {
-        Write-Error "Windows 10 version 2004 or Windows 11 required for WSL2. Current version: $version"
+    if ($build -lt 19041) {
+        Write-Error "Windows 10 build 19041 (version 2004) or Windows 11 required for WSL2. Current build: $build"
         exit 1
     }
 
-    Write-Success "Windows $version detected"
+    Write-Success "Windows build $build detected"
 }
 
 # Enable WSL2 feature
@@ -112,8 +114,19 @@ function Install-WindowsTools {
         Write-Info "Installing Chocolatey..."
         Set-ExecutionPolicy Bypass -Scope Process -Force
         [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-        Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
-        refreshenv
+        Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+        # Try to import Chocolatey profile to enable refreshenv in current session
+        if ($env:ChocolateyInstall) {
+            $chocoProfile = Join-Path $env:ChocolateyInstall 'helpers\chocolateyProfile.psm1'
+            if (Test-Path $chocoProfile) {
+                Import-Module $chocoProfile -ErrorAction SilentlyContinue
+            }
+        }
+        if (Get-Command refreshenv -ErrorAction SilentlyContinue) {
+            refreshenv
+        } else {
+            Write-Info "Chocolatey installed. Open a new terminal to refresh PATH or run: `Import-Module $env:ChocolateyInstall\\helpers\\chocolateyProfile.psm1; refreshenv`"
+        }
     }
 
     # Install development tools via Chocolatey
@@ -130,7 +143,7 @@ function Install-WindowsTools {
         "postman",
         "gitkraken",
         "microsoft-windows-terminal",
-        "powershell-core"
+        "powershell"
     )
 
     foreach ($tool in $tools) {
@@ -140,7 +153,18 @@ function Install-WindowsTools {
             Write-Success "$tool installed"
         }
         catch {
-            Write-Warning "Failed to install $tool"
+            if ($tool -eq "eclipse") {
+                Write-Info "Trying Eclipse fallback package 'eclipse-java'..."
+                try {
+                    choco install eclipse-java -y
+                    Write-Success "eclipse-java installed"
+                }
+                catch {
+                    Write-Warning "Failed to install eclipse and eclipse-java"
+                }
+            } else {
+                Write-Warning "Failed to install $tool"
+            }
         }
     }
 
@@ -230,6 +254,12 @@ function Set-DevEnvironment {
 
     $newPath = $pathArray -join ";"
     [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+    # Also update current session PATH if refreshenv wasn't available
+    foreach ($devPath in $devPaths) {
+        if ((Test-Path $devPath) -and ($env:PATH -notlike "*${devPath}*")) {
+            $env:PATH = "$env:PATH;$devPath"
+        }
+    }
 
     Write-Success "Environment variables configured"
 }
@@ -260,10 +290,10 @@ function Test-Installation {
     foreach ($tool in $windowsTools) {
         try {
             $null = Get-Command $tool -ErrorAction Stop
-            Write-Success "$tool: found"
+            Write-Success "${tool}: found"
         }
         catch {
-            Write-Error "$tool: NOT FOUND"
+            Write-Error "${tool}: NOT FOUND"
             $errors++
         }
     }

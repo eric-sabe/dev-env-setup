@@ -1,10 +1,26 @@
 # Development Environment Setup Guide
 
+## Prerequisites
+
+You need Git to clone this repository before running any setup scripts.
+
+- macOS: Run `xcode-select --install` to install Command Line Tools (includes Git), then verify with `git --version`.
+- Ubuntu/Debian: `sudo apt update && sudo apt install -y git`
+- Fedora: `sudo dnf install -y git`
+- Windows: Install "Git for Windows" from https://git-scm.com/download/win and restart PowerShell/Terminal.
+
+Verify:
+```bash
+git --version
+```
+
 ## Detailed Platform Setup
 
 ### macOS Setup
 
 **Requirements**: macOS 12+ (Monterey or later), Admin access
+
+Note: In commands below, replace `~/dev-scripts` with the path where you cloned this repo.
 
 **Initial Setup**:
 ```bash

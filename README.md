@@ -6,6 +6,13 @@ A comprehensive collection of scripts to set up and manage development environme
 
 ## 🚀 Quick Start
 
+**First, ensure Git is installed:**
+
+- macOS: `xcode-select --install` (then `git --version`)
+- Ubuntu/Debian: `sudo apt update && sudo apt install -y git`
+- Fedora: `sudo dnf install -y git`
+- Windows: Install "Git for Windows" from https://git-scm.com/download/win, then restart PowerShell/Terminal.
+
 **Get coding in 5 minutes:**
 
 1. **Clone this repository**:
