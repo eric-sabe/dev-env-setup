@@ -46,9 +46,6 @@ function Test-Administrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# Check for pending reboot
-function Test-PendingReboot {
-
 # Logging functions
 function Write-Info {
     param([string]$Message)
