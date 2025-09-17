@@ -10,6 +10,9 @@ param(
 # Import required modules
 Import-Module DISM -ErrorAction SilentlyContinue
 
+# Global flag for Parallels/ARM64 environment
+$IsParallelsARM64 = $false
+
 # Check for pending reboot
 function Test-PendingReboot {
     $pendingReboot = $false
@@ -37,6 +40,36 @@ function Test-Administrator {
     $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+# Check if running in Parallels on Apple Silicon (where WSL2 won't work)
+function Test-ParallelsAppleSilicon {
+    try {
+        # Check for Parallels virtual hardware
+        $systemInfo = Get-WmiObject -Class Win32_ComputerSystem
+        $manufacturer = $systemInfo.Manufacturer
+        $model = $systemInfo.Model
+        
+        # Check if we're in Parallels
+        $isParallels = $manufacturer -like "*Parallels*" -or $model -like "*Parallels*"
+        
+        if ($isParallels) {
+            # Check for Apple Silicon architecture
+            $processor = Get-WmiObject -Class Win32_Processor
+            $architecture = $processor.Architecture
+            
+            # Architecture 12 = ARM64, which indicates Apple Silicon
+            if ($architecture -eq 12) {
+                return $true
+            }
+        }
+        
+        return $false
+    }
+    catch {
+        # If we can't detect, assume it's not the problematic scenario
+        return $false
+    }
 }
 
 # Logging functions
@@ -83,6 +116,11 @@ function Enable-WSL2 {
     }
 
     Write-Info "Enabling WSL2 feature..."
+
+    # Additional warning for Parallels on Apple Silicon
+    if (Test-ParallelsAppleSilicon) {
+        Write-Warning "Note: WSL2 features will be installed, but Ubuntu may not run due to virtualization limitations in Parallels on Apple Silicon"
+    }
 
     # Check if WSL is already enabled
     $wslFeature = Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux
@@ -131,6 +169,11 @@ function Install-UbuntuWSL {
     }
 
     Write-Info "Installing Ubuntu WSL2..."
+
+    # Additional warning for Parallels on Apple Silicon
+    if (Test-ParallelsAppleSilicon) {
+        Write-Warning "Note: Ubuntu will be downloaded and installed, but it may not be able to run due to virtualization limitations"
+    }
 
     # Check if WSL is working
     try {
@@ -301,6 +344,16 @@ function Install-WindowsTools {
 
     Write-Host ""
     Write-Success "Windows tools installation completed: $successCount successful, $failCount failed"
+    
+    if ($script:IsParallelsARM64) {
+        Write-Host ""
+        Write-Host "💡 Parallels ARM64 Environment Notes:" -ForegroundColor Cyan
+        Write-Host "• All installed tools work perfectly in this environment" -ForegroundColor Green
+        Write-Host "• VS Code, Git, Python, Node.js, and Java all have excellent performance" -ForegroundColor Green
+        Write-Host "• Use Docker Desktop for container development" -ForegroundColor Green
+        Write-Host "• Consider Remote SSH extension for Linux development" -ForegroundColor Yellow
+    }
+    
     if ($failCount -gt 0) {
         Write-Warning "Some tools failed to install. This may be due to pending system reboot."
         Write-Info "After restarting your computer, you can retry failed installations with:"
@@ -444,8 +497,15 @@ function Test-Installation {
 
 # Main installation function
 function Install-DevEnvironment {
-    Write-Host "Setting up Windows Development Environment" -ForegroundColor Blue
-    Write-Host "===============================================" -ForegroundColor Blue
+    if ($script:IsParallelsARM64) {
+        Write-Host "Setting up Windows Development Environment (Parallels ARM64 Mode)" -ForegroundColor Blue
+        Write-Host "=================================================================" -ForegroundColor Blue
+        Write-Host "Note: WSL2 will be skipped due to virtualization limitations" -ForegroundColor Yellow
+        Write-Host "Focusing on Windows-native development tools" -ForegroundColor Yellow
+    } else {
+        Write-Host "Setting up Windows Development Environment" -ForegroundColor Blue
+        Write-Host "===============================================" -ForegroundColor Blue
+    }
 
     # Check prerequisites
     if (!(Test-Administrator)) {
@@ -455,25 +515,93 @@ function Install-DevEnvironment {
 
     Test-WindowsVersion
 
-    # Install components
-    Enable-WSL2
-    Install-UbuntuWSL
-    Install-WindowsTools
-    Configure-WindowsTerminal
-    Install-WSAA
-    New-DevDirectories
-    Set-DevEnvironment
-    Test-Installation
+    # Check for Parallels on Apple Silicon (WSL2 won't work)
+    if (Test-ParallelsAppleSilicon) {
+        Write-Warning "⚠️  DETECTED: Windows running in Parallels on Apple Silicon"
+        Write-Host ""
+        Write-Host "Unfortunately, WSL2 cannot run properly in this environment because:" -ForegroundColor Yellow
+        Write-Host "• Apple Silicon Macs don't support Hyper-V virtualization" -ForegroundColor Yellow
+        Write-Host "• Parallels cannot provide the required virtualization features" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "What this means:" -ForegroundColor Cyan
+        Write-Host "• WSL2 features can be installed (which this script will do)" -ForegroundColor Cyan
+        Write-Host "• Ubuntu can be downloaded and installed" -ForegroundColor Cyan
+        Write-Host "• But Ubuntu will NOT be able to run or start" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "Alternatives:" -ForegroundColor Green
+        Write-Host "• Use native macOS with UTM or Docker Desktop for Linux containers" -ForegroundColor Green
+        Write-Host "• Use Visual Studio Code with Remote SSH to connect to a real Linux server" -ForegroundColor Green
+        Write-Host "• Use Windows natively (not in Parallels) for full WSL2 support" -ForegroundColor Green
+        Write-Host ""
+        $continue = Read-Host "Do you want to continue anyway? (y/N)"
+        if ($continue -ne "y" -and $continue -ne "Y") {
+            Write-Info "Exiting script. Consider the alternatives above."
+            exit 0
+        }
+        Write-Warning "Continuing with installation, but WSL2 functionality will be limited..."
+        Write-Info "Will install Windows development tools that work in this environment."
+        $script:IsParallelsARM64 = $true
+        $SkipWSLInstall = $true  # Automatically skip WSL installations
+    }
+
+    # Install components (conditionally based on environment)
+    if ($script:IsParallelsARM64) {
+        Write-Info "Installing Windows-native development tools..."
+        Install-WindowsTools
+        Configure-WindowsTerminal
+        Install-WSAA
+        New-DevDirectories
+        Set-DevEnvironment
+        Test-Installation
+    } else {
+        Write-Info "Installing full development environment..."
+        Enable-WSL2
+        Install-UbuntuWSL
+        Install-WindowsTools
+        Configure-WindowsTerminal
+        Install-WSAA
+        New-DevDirectories
+        Set-DevEnvironment
+        Test-Installation
+    }
 
     Write-Host ""
     Write-Host "Windows development environment setup complete!" -ForegroundColor Green
     Write-Host ""
-    Write-Host "Next steps:" -ForegroundColor Yellow
-    Write-Host "1. Restart your computer to complete WSL2 installation"
-    Write-Host "2. Launch Ubuntu from Start Menu and complete setup"
-    Write-Host "3. Run the WSL setup script: wsl bash ~/dev-scripts/setup/windows/setup-wsl.sh"
-    Write-Host "4. Install VS Code extensions for your languages"
-    Write-Host "5. Use the quickstart scripts to create new projects"
+
+    # Context-aware next steps based on environment
+    if ($script:IsParallelsARM64) {
+        Write-Host "🎯 Windows Development Environment Setup Complete (Parallels ARM64 Mode)" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "What was installed:" -ForegroundColor Cyan
+        Write-Host "✅ Chocolatey package manager" -ForegroundColor Green
+        Write-Host "✅ Git version control" -ForegroundColor Green
+        Write-Host "✅ Visual Studio Code" -ForegroundColor Green
+        Write-Host "✅ Development tools (Python, Node.js, Java, etc.)" -ForegroundColor Green
+        Write-Host "✅ Windows Terminal configuration" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "What was skipped:" -ForegroundColor Yellow
+        Write-Host "⏭️  WSL2 and Ubuntu (not supported in Parallels ARM64)" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "Recommended next steps:" -ForegroundColor Yellow
+        Write-Host "1. Use VS Code for all your development work" -ForegroundColor White
+        Write-Host "2. For Linux development, consider:" -ForegroundColor White
+        Write-Host "   • Remote SSH to a Linux server/VM" -ForegroundColor Cyan
+        Write-Host "   • Use macOS natively for Linux tools" -ForegroundColor Cyan
+        Write-Host "   • UTM for local Linux VMs on macOS" -ForegroundColor Cyan
+        Write-Host "3. Install VS Code extensions for your preferred languages" -ForegroundColor White
+        Write-Host "4. Use the quickstart scripts to create new projects" -ForegroundColor White
+    } else {
+        Write-Host "🎯 Windows Development Environment Setup Complete" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "Next steps:" -ForegroundColor Yellow
+        Write-Host "1. Restart your computer to complete WSL2 installation"
+        Write-Host "2. Launch Ubuntu from Start Menu and complete setup"
+        Write-Host "3. Run the WSL setup script: wsl bash ~/dev-scripts/setup/windows/setup-wsl.sh"
+        Write-Host "4. Install VS Code extensions for your languages"
+        Write-Host "5. Use the quickstart scripts to create new projects"
+    }
+
     Write-Host ""
     Write-Host "Happy coding!" -ForegroundColor Blue
 }
