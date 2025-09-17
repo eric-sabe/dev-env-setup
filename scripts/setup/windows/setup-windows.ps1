@@ -200,7 +200,7 @@ function Enable-WSL2 {
             $wslConfigPath = Join-Path $env:UserProfile '.wslconfig'
             $content = if (Test-Path $wslConfigPath) { Get-Content $wslConfigPath -Raw } else { "" }
 
-            if ($content -notmatch '^\[wsl2\]'m) {
+            if ($content -notmatch '(?m)^\[wsl2\]') {
                 # No [wsl2] section yet — create one with the setting ON
                 $content = @"
 [wsl2]
