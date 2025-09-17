@@ -156,20 +156,6 @@ function Enable-WSL2 {
 
     Write-Info "Enabling WSL2 feature..."
 
-    # Additional guidance for Parallels on Apple Silicon
-    if (Test-ParallelsAppleSilicon) {
-        $nestedVirtAvailable = Test-NestedVirtualization
-
-        if ($nestedVirtAvailable) {
-            Write-Info "Parallels ARM64 detected - nested virtualization is configured!"
-            Write-Host "✅ WSL2 should work properly in this environment" -ForegroundColor Green
-        } else {
-            Write-Info "Parallels ARM64 detected - configuring nested virtualization automatically"
-            Write-Host "The script will configure WSL2 for nested virtualization automatically." -ForegroundColor Green
-            Write-Host "A restart may be required after setup completes." -ForegroundColor Yellow
-        }
-    }
-
     # Check if WSL is already enabled
     $wslFeature = Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux
     $vmFeature = Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform
@@ -198,11 +184,10 @@ function Enable-WSL2 {
         return
     }
 
-    # Configure nested virtualization for Parallels ARM64
-    if (Test-ParallelsAppleSilicon) {
-        Write-Info "Configuring nested virtualization settings..."
+    # Configure nested virtualization settings automatically
+    Write-Info "Configuring nested virtualization settings..."
 
-        # Set the environment variable for nested virtualization
+    # Set the environment variable for nested virtualization
         try {
             [Environment]::SetEnvironmentVariable("WSL_ENABLE_NESTED_VIRTUALIZATION", "1", "Machine")
             Write-Success "Set WSL_ENABLE_NESTED_VIRTUALIZATION=1"
@@ -250,7 +235,6 @@ nestedVirtualization=true
         } catch {
             Write-Info "Developer Mode may need to be enabled manually in Windows Settings"
         }
-    }
 
     # Set WSL2 as default version (only if WSL is already working)
     try {
@@ -271,20 +255,6 @@ function Install-UbuntuWSL {
     }
 
     Write-Info "Installing Ubuntu WSL2..."
-
-    # Additional guidance for Parallels on Apple Silicon
-    if (Test-ParallelsAppleSilicon) {
-        $nestedVirtAvailable = Test-NestedVirtualization
-
-        if ($nestedVirtAvailable) {
-            Write-Info "Parallels ARM64 detected - nested virtualization is configured!"
-            Write-Host "✅ Ubuntu should install and work properly" -ForegroundColor Green
-        } else {
-            Write-Info "Parallels ARM64 detected - configuring nested virtualization automatically"
-            Write-Host "The script will configure Ubuntu for nested virtualization automatically." -ForegroundColor Green
-            Write-Host "A restart may be required after setup completes." -ForegroundColor Yellow
-        }
-    }
 
     # Check if WSL is working
     try {
@@ -608,8 +578,8 @@ function Test-Installation {
 
 # Uninstall development environment
 function Uninstall-DevEnvironment {
-    Write-Host "🗑️  Uninstalling Windows Development Environment" -ForegroundColor Red
-    Write-Host "=================================================" -ForegroundColor Red
+    Write-Host "Uninstalling Windows Development Environment" -ForegroundColor Red
+    Write-Host "===============================================" -ForegroundColor Red
 
     # Check prerequisites
     if (!(Test-Administrator)) {
@@ -617,21 +587,12 @@ function Uninstall-DevEnvironment {
         exit 1
     }
 
-    # Check for Parallels ARM64 mode
-    if (Test-ParallelsAppleSilicon) {
-        $script:IsParallelsARM64 = $true
-    }
-
     Write-Warning "This will remove all development tools and configurations installed by this script."
     Write-Host ""
     Write-Host "The following will be removed:" -ForegroundColor Yellow
     Write-Host "• Chocolatey package manager" -ForegroundColor Yellow
     Write-Host "• All development tools (Git, VS Code, Python, Node.js, Java, etc.)" -ForegroundColor Yellow
-    if (!$script:IsParallelsARM64) {
-        Write-Host "• WSL2 and Ubuntu (if installed)" -ForegroundColor Yellow
-    } else {
-        Write-Host "• WSL2/Ubuntu (not applicable in Parallels ARM64 mode)" -ForegroundColor Cyan
-    }
+    Write-Host "• WSL2/Ubuntu subsystem" -ForegroundColor Yellow
     Write-Host "• Development directories and configurations (optional)" -ForegroundColor Yellow
     Write-Host "• Environment variable modifications" -ForegroundColor Yellow
     Write-Host ""
@@ -784,7 +745,7 @@ function Uninstall-DevEnvironment {
     Write-Host "🗑️  Uninstallation Complete!" -ForegroundColor Green
     Write-Host ""
     Write-Host "Summary:" -ForegroundColor Cyan
-    Write-Host "✅ Packages removed: $removedCount" -ForegroundColor Green
+    Write-Host "Packages removed: $removedCount" -ForegroundColor Green
     Write-Host "⚠️  Failed removals: $failedCount" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "Note: Some files may remain if they were in use during uninstallation." -ForegroundColor Yellow
@@ -795,15 +756,8 @@ function Uninstall-DevEnvironment {
 
 # Main installation function
 function Install-DevEnvironment {
-    if ($script:IsParallelsARM64) {
-        Write-Host "Setting up Windows Development Environment (Parallels ARM64 Mode)" -ForegroundColor Blue
-        Write-Host "=================================================================" -ForegroundColor Blue
-        Write-Host "Note: WSL2 will be skipped due to virtualization limitations" -ForegroundColor Yellow
-        Write-Host "Focusing on Windows-native development tools" -ForegroundColor Yellow
-    } else {
-        Write-Host "Setting up Windows Development Environment" -ForegroundColor Blue
-        Write-Host "===============================================" -ForegroundColor Blue
-    }
+    Write-Host "Setting up Windows Development Environment" -ForegroundColor Blue
+    Write-Host "==========================================" -ForegroundColor Blue
 
     # Check prerequisites
     if (!(Test-Administrator)) {
@@ -813,93 +767,30 @@ function Install-DevEnvironment {
 
     Test-WindowsVersion
 
-    # Check for Parallels on Apple Silicon (WSL2 may work with nested virtualization)
-    if (Test-ParallelsAppleSilicon) {
-        Write-Warning "⚠️  DETECTED: Windows running in Parallels on Apple Silicon"
-        Write-Host ""
-        Write-Host "Good news! WSL2 can actually work in this environment with nested virtualization:" -ForegroundColor Green
-        Write-Host ""
-        Write-Host "To enable WSL2 in Parallels on Apple Silicon:" -ForegroundColor Cyan
-        Write-Host "1. In Parallels Desktop, go to your VM settings" -ForegroundColor White
-        Write-Host "2. Navigate to Hardware > CPU & Memory > Advanced" -ForegroundColor White
-        Write-Host "3. Enable 'Nested virtualization'" -ForegroundColor White
-        Write-Host "4. Restart your Windows VM" -ForegroundColor White
-        Write-Host ""
-        Write-Host "After enabling nested virtualization, WSL2 will work normally!" -ForegroundColor Green
-        Write-Host ""
-        $enableWSL = Read-Host "Would you like to continue with WSL2 installation? (Y/n)"
-        if ($enableWSL -eq "n" -or $enableWSL -eq "N") {
-            Write-Info "Skipping WSL2 installation. You can enable it later by running this script again."
-            $script:IsParallelsARM64 = $true
-            $SkipWSLInstall = $true
-        } else {
-            Write-Info "Continuing with WSL2 installation..."
-            Write-Info "Remember to enable nested virtualization in Parallels settings for WSL2 to work!"
-        }
-    }
-
-    # Install components (conditionally based on environment)
-    if ($script:IsParallelsARM64) {
-        Write-Info "Installing Windows-native development tools..."
-        Install-WindowsTools
-        Configure-WindowsTerminal
-        Install-WSAA
-        New-DevDirectories
-        Set-DevEnvironment
-        Test-Installation
-    } else {
-        Write-Info "Installing full development environment..."
-        Enable-WSL2
-        Install-UbuntuWSL
-        Install-WindowsTools
-        Configure-WindowsTerminal
-        Install-WSAA
-        New-DevDirectories
-        Set-DevEnvironment
-        Test-Installation
-    }
+    # Install all components
+    Write-Info "Installing full development environment..."
+    Enable-WSL2
+    Install-UbuntuWSL
+    Install-WindowsTools
+    Configure-WindowsTerminal
+    Install-WSAA
+    New-DevDirectories
+    Set-DevEnvironment
+    Test-Installation
 
     Write-Host ""
     Write-Host "Windows development environment setup complete!" -ForegroundColor Green
     Write-Host ""
 
-    # Context-aware next steps based on environment
-    if ($script:IsParallelsARM64) {
-        Write-Host "🎯 Windows Development Environment Setup Complete (Parallels ARM64 Mode)" -ForegroundColor Green
-        Write-Host ""
-        Write-Host "What was installed:" -ForegroundColor Cyan
-        Write-Host "✅ Chocolatey package manager" -ForegroundColor Green
-        Write-Host "✅ Git version control" -ForegroundColor Green
-        Write-Host "✅ Visual Studio Code" -ForegroundColor Green
-        Write-Host "✅ Development tools (Python, Node.js, Java, etc.)" -ForegroundColor Green
-        Write-Host "✅ Windows Terminal configuration" -ForegroundColor Green
-        Write-Host ""
-        Write-Host "WSL2 Status:" -ForegroundColor Yellow
-        Write-Host "✅ WSL2 setup complete with nested virtualization support" -ForegroundColor Green
-        Write-Host ""
-        Write-Host "What was configured automatically:" -ForegroundColor Green
-        Write-Host "✅ Enabled WSL and Virtual Machine Platform features" -ForegroundColor Green
-        Write-Host "✅ Set WSL_ENABLE_NESTED_VIRTUALIZATION=1 environment variable" -ForegroundColor Green
-        Write-Host "✅ Configured .wslconfig with nestedVirtualization=true" -ForegroundColor Green
-        Write-Host "✅ Enabled Developer Mode" -ForegroundColor Green
-        Write-Host ""
-        Write-Host "💡 If WSL2 doesn't work immediately:" -ForegroundColor Yellow
-        Write-Host "• Restart Windows VM to ensure all settings take effect" -ForegroundColor Cyan
-        Write-Host ""
-        Write-Host "Alternative Linux development:" -ForegroundColor Yellow
-        Write-Host "• Remote SSH to a Linux server/VM" -ForegroundColor Cyan
-        Write-Host "• Use macOS natively for Linux tools" -ForegroundColor Cyan
-        Write-Host "• UTM for local Linux VMs on macOS" -ForegroundColor Cyan
-    } else {
-        Write-Host "🎯 Windows Development Environment Setup Complete" -ForegroundColor Green
-        Write-Host ""
-        Write-Host "Next steps:" -ForegroundColor Yellow
-        Write-Host "1. Restart your computer to complete WSL2 installation"
-        Write-Host "2. Launch Ubuntu from Start Menu and complete setup"
-        Write-Host "3. Run the WSL setup script: wsl bash ~/dev-scripts/setup/windows/setup-wsl.sh"
-        Write-Host "4. Install VS Code extensions for your languages"
-        Write-Host "5. Use the quickstart scripts to create new projects"
-    }
+    # Next steps
+    Write-Host "Windows Development Environment Setup Complete" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Next steps:" -ForegroundColor Yellow
+    Write-Host "1. Restart your computer to complete WSL2 installation"
+    Write-Host "2. Launch Ubuntu from Start Menu and complete setup"
+    Write-Host "3. Run the WSL setup script: wsl bash ~/dev-scripts/setup/windows/setup-wsl.sh"
+    Write-Host "4. Install VS Code extensions for your languages"
+    Write-Host "5. Use the quickstart scripts to create new projects"
 
     Write-Host ""
     Write-Host "Happy coding!" -ForegroundColor Blue
