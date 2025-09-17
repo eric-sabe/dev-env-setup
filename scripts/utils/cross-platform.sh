@@ -25,6 +25,35 @@ log_warn()    { echo -e "${YELLOW}[WARN]${RESET} $*"; }
 log_error()   { echo -e "${RED}[ERROR]${RESET} $*" >&2; }
 log_success() { echo -e "${GREEN}[OK]${RESET} $*"; }
 
+# Timing functions
+start_timer() {
+    local operation="$1"
+    export STEP_START_TIME=$(date +%s)
+    log_info "Starting: $operation"
+}
+
+stop_timer() {
+    local operation="$1"
+    if [[ -n "${STEP_START_TIME:-}" ]]; then
+        local end_time=$(date +%s)
+        local elapsed=$((end_time - STEP_START_TIME))
+        log_success "Completed: $operation (${elapsed}s)"
+        unset STEP_START_TIME
+    else
+        log_success "Completed: $operation"
+    fi
+}
+
+log_timed_info() {
+    local timestamp=$(date +"%H:%M:%S")
+    echo -e "[$timestamp] ${BLUE}[INFO]${RESET} $*"
+}
+
+log_timed_success() {
+    local timestamp=$(date +"%H:%M:%S")
+    echo -e "[$timestamp] ${GREEN}[OK]${RESET} $*"
+}
+
 # Trap helper (portable across bash/zsh). Avoid BASH_SOURCE when not in bash.
 __cp_script_name() {
   if [[ -n "${BASH_VERSION:-}" ]]; then

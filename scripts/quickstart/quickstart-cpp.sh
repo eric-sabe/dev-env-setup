@@ -5,6 +5,10 @@
 set -Eeuo pipefail
 trap 'echo "[ERROR] quickstart-cpp failed at ${BASH_SOURCE[0]}:${LINENO}" >&2' ERR
 
+# Source cross-platform utilities for timing functionality
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../utils/cross-platform.sh"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -87,7 +91,8 @@ create_cpp_project() {
     local project_name=$1
     local cpp_standard=${2:-17}
 
-    log_info "Creating C++ project: $project_name (C++$cpp_standard)"
+    start_timer "cpp_project_creation"
+    log_timed_info "cpp_project_creation" "Creating C++ project: $project_name (C++$cpp_standard)"
 
     # Create project directory
     mkdir -p "$project_name"
@@ -461,7 +466,8 @@ EOF
     # Make run script executable
     chmod +x run.sh
 
-    log_success "C++ project created successfully"
+    stop_timer "cpp_project_creation"
+    log_timed_success "cpp_project_creation" "C++ project created successfully"
 }
 
 # Main function

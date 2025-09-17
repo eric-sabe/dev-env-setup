@@ -76,7 +76,8 @@ check_vscode() {
 
 # Install VS Code
 install_vscode() {
-    log_info "Installing VS Code (channel: $VSCODE_CHANNEL)..."
+    start_timer
+    log_timed_info "Installing VS Code (channel: $VSCODE_CHANNEL)..."
 
     case $PLATFORM in
         macos)
@@ -122,7 +123,8 @@ install_vscode() {
 
     # Verify installation
     if command -v code &>/dev/null; then
-        log_success "VS Code installed successfully"
+        stop_timer
+        log_timed_success "VS Code installed successfully"
     else
         log_error "VS Code installation failed"
         exit 1
@@ -131,7 +133,8 @@ install_vscode() {
 
 # Install VS Code extensions
 install_extensions() {
-    log_info "Installing VS Code extensions (idempotent)..."
+    start_timer
+    log_timed_info "Installing VS Code extensions (idempotent)..."
 
     # Core extensions
     local extensions=(
@@ -214,13 +217,15 @@ install_extensions() {
         log_warning "Some extensions failed to install: ${failed_extensions[*]}"
         log_info "You can try installing them manually from the VS Code marketplace"
     else
-        log_success "All extensions installed successfully"
+        stop_timer
+        log_timed_success "All extensions installed successfully"
     fi
 }
 
 # Configure VS Code settings
 configure_settings() {
-    log_info "Configuring VS Code settings..."
+    start_timer
+    log_timed_info "Configuring VS Code settings..."
 
     # Determine settings location
     local settings_dir
@@ -350,12 +355,14 @@ configure_settings() {
 }
 EOF
 
-    log_success "VS Code settings configured"
+    stop_timer
+    log_timed_success "VS Code settings configured"
 }
 
 # Configure keybindings
 configure_keybindings() {
-    log_info "Configuring VS Code keybindings..."
+    start_timer
+    log_timed_info "Configuring VS Code keybindings..."
 
     local keybindings_dir
     case $PLATFORM in
@@ -403,12 +410,14 @@ configure_keybindings() {
 ]
 EOF
 
-    log_success "VS Code keybindings configured"
+    stop_timer
+    log_timed_success "VS Code keybindings configured"
 }
 
-# Create workspace settings template
+# Create workspace template
 create_workspace_template() {
-    log_info "Creating workspace settings template..."
+    start_timer
+    log_timed_info "Creating workspace settings template..."
 
     local template_dir="$HOME/dev/tools/vscode-templates"
     mkdir -p "$template_dir"
@@ -473,7 +482,8 @@ EOF
 }
 EOF
 
-    log_success "VS Code templates created in $template_dir"
+    stop_timer
+    log_timed_success "VS Code templates created in $template_dir"
 }
 
 # Main function

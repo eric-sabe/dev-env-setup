@@ -36,26 +36,28 @@ check_macos() {
 
 # Install Xcode Command Line Tools
 install_xcode_tools() {
-    log_info "Checking Xcode Command Line Tools..."
+    start_timer "Xcode Command Line Tools installation"
 
     if ! xcode-select -p &>/dev/null; then
-        log_info "Installing Xcode Command Line Tools..."
+        log_timed_info "Installing Xcode Command Line Tools..."
         xcode-select --install
 
         # Wait for installation to complete
         log_info "Please complete the Xcode Command Line Tools installation, then press Enter to continue..."
         read -r
+        stop_timer "Xcode Command Line Tools installation"
     else
-        log_success "Xcode Command Line Tools already installed"
+        log_timed_success "Xcode Command Line Tools already installed"
+        stop_timer "Xcode Command Line Tools installation"
     fi
 }
 
 # Install Homebrew
 install_homebrew() {
-    log_info "Checking Homebrew..."
+    start_timer "Homebrew installation and setup"
 
     if ! command -v brew &>/dev/null; then
-        log_info "Installing Homebrew..."
+        log_timed_info "Installing Homebrew..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
         # Add Homebrew to PATH for this session
@@ -63,17 +65,19 @@ install_homebrew() {
             eval "$(/opt/homebrew/bin/brew shellenv)"
         fi
     else
-        log_success "Homebrew already installed"
+        log_timed_success "Homebrew already installed"
     fi
 
     # Update Homebrew
-    log_info "Updating Homebrew..."
+    log_timed_info "Updating Homebrew..."
     brew update
+    
+    stop_timer "Homebrew installation and setup"
 }
 
 # Install development tools
 install_dev_tools() {
-    log_info "Installing development tools..."
+    start_timer "Development tools installation"
 
     # Core development tools
     brew install git cmake wget curl htop tree jq
@@ -84,12 +88,12 @@ install_dev_tools() {
     # Version control and productivity
     brew install gh  # GitHub CLI
 
-    log_success "Development tools installed"
+    stop_timer "Development tools installation"
 }
 
 # Install Python and pyenv
 install_python() {
-    log_info "Setting up Python environment..."
+    start_timer "Python environment setup"
 
     # Install pyenv
     if ! command -v pyenv &>/dev/null; then
@@ -110,12 +114,13 @@ install_python() {
     pipx install virtualenv
     pipx install pipenv
 
-    log_success "Python environment configured"
+    stop_timer "Python environment setup"
 }
 
 # Install Node.js and nvm
 install_nodejs() {
-    log_info "Setting up Node.js environment..."
+    start_timer
+    log_timed_info "Setting up Node.js environment..."
 
     # Install nvm
     if [[ ! -d "$HOME/.nvm" ]]; then
@@ -139,12 +144,14 @@ install_nodejs() {
     npm install -g npm@latest
     npm install -g yarn pnpm typescript @types/node
 
-    log_success "Node.js environment configured"
+    stop_timer
+    log_timed_success "Node.js environment configured"
 }
 
 # Install Java and SDKMAN
 install_java() {
-    log_info "Setting up Java environment..."
+    start_timer
+    log_timed_info "Setting up Java environment..."
 
     # Install SDKMAN
     if [[ ! -d "$HOME/.sdkman" ]]; then
@@ -166,12 +173,14 @@ install_java() {
     sdk install maven || log_warning "Maven already installed or failed to install"
     sdk install gradle || log_warning "Gradle already installed or failed to install"
 
-    log_success "Java environment configured"
+    stop_timer
+    log_timed_success "Java environment configured"
 }
 
 # Install C++ tools
 install_cpp() {
-    log_info "Setting up C++ development environment..."
+    start_timer
+    log_timed_info "Setting up C++ development environment..."
 
     # Install LLVM/Clang
     brew install llvm
@@ -180,12 +189,14 @@ install_cpp() {
     # Install additional C++ tools
     brew install boost eigen opencv
 
-    log_success "C++ environment configured"
+    stop_timer
+    log_timed_success "C++ environment configured"
 }
 
 # Install databases
 install_databases() {
-    log_info "Installing database tools..."
+    start_timer
+    log_timed_info "Installing database tools..."
 
     # Install PostgreSQL
     brew install postgresql
@@ -207,12 +218,14 @@ install_databases() {
     # Install database clients and tools
     brew install pgcli mycli
 
-    log_success "Database tools installed"
+    stop_timer
+    log_timed_success "Database tools installed"
 }
 
 # Install Docker
 install_docker() {
-    log_info "Installing Docker..."
+    start_timer
+    log_timed_info "Installing Docker..."
 
     if ! command -v docker &>/dev/null; then
         brew install --cask docker
@@ -220,11 +233,15 @@ install_docker() {
     else
         log_success "Docker already installed"
     fi
+    
+    stop_timer
+    log_timed_success "Docker setup completed"
 }
 
 # Install IDEs
 install_ides() {
-    log_info "Installing IDEs..."
+    start_timer
+    log_timed_info "Installing IDEs..."
 
     # Install VS Code
     if ! command -v code &>/dev/null; then
@@ -237,12 +254,14 @@ install_ides() {
     # Install Eclipse
     brew install --cask eclipse-java
 
-    log_success "IDEs installed"
+    stop_timer
+    log_timed_success "IDEs installed"
 }
 
 # Configure shell environment
 configure_shell() {
-    log_info "Configuring shell environment..."
+    start_timer
+    log_timed_info "Configuring shell environment..."
 
     local shell_rc="$HOME/.zshrc"
 
@@ -282,22 +301,26 @@ configure_shell() {
         echo 'alias mkvenv="python -m venv venv && activate"' >> "$shell_rc"
     fi
 
-    log_success "Shell environment configured"
+    stop_timer
+    log_timed_success "Shell environment configured"
 }
 
 # Create development directory structure
 create_dev_structure() {
-    log_info "Creating development directory structure..."
+    start_timer
+    log_timed_info "Creating development directory structure..."
 
     mkdir -p ~/dev/{current,archive,tools,backups}
     mkdir -p ~/dev/current/{python,nodejs,java,cpp,web,mobile}
 
-    log_success "Development directories created"
+    stop_timer
+    log_timed_success "Development directories created"
 }
 
 # Verify installation
 verify_installation() {
-    log_info "Verifying installation..."
+    start_timer
+    log_timed_info "Verifying installation..."
 
     local errors=0
 
@@ -333,8 +356,9 @@ verify_installation() {
         ((errors++))
     fi
 
+    stop_timer
     if [[ $errors -eq 0 ]]; then
-        log_success "All tools verified successfully!"
+        log_timed_success "All tools verified successfully!"
     else
         log_warning "$errors tools failed verification. You may need to restart your terminal or check the installation logs."
     fi

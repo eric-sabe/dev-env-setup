@@ -40,6 +40,12 @@ log_header() {
     echo -e "${PURPLE}$(printf '%.0s=' {1..50})${NC}"
 }
 
+# Source utility scripts
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UTIL_DIR="${SCRIPT_DIR%/quickstart*/}/utils"
+[[ -f "$UTIL_DIR/cross-platform.sh" ]] && source "$UTIL_DIR/cross-platform.sh"
+[[ -f "$UTIL_DIR/idempotency.sh" ]] && source "$UTIL_DIR/idempotency.sh"
+
 # Check prerequisites
 check_prerequisites() {
     log_info "Checking prerequisites..."
@@ -132,7 +138,8 @@ get_project_info() {
 
 # Create project directory
 create_project_directory() {
-    log_info "Creating project directory: $PROJECT_NAME"
+    start_timer
+    log_timed_info "Creating project directory: $PROJECT_NAME"
 
     if [[ -d "$PROJECT_NAME" ]]; then
         log_error "Directory '$PROJECT_NAME' already exists"
@@ -142,12 +149,14 @@ create_project_directory() {
     mkdir -p "$PROJECT_NAME"
     cd "$PROJECT_NAME"
 
-    log_success "Project directory created"
+    stop_timer
+    log_timed_success "Project directory created"
 }
 
 # Initialize package.json
 initialize_package_json() {
-    log_info "Initializing package.json..."
+    start_timer
+    log_timed_info "Initializing package.json..."
 
     # Determine scripts JSON block
     if [[ "$USE_TYPESCRIPT" == "true" ]]; then
@@ -207,12 +216,14 @@ EOF
       fi
     fi
 
-    log_success "package.json created"
+    stop_timer
+    log_timed_success "package.json created"
 }
 
 # Install dependencies
 install_dependencies() {
-    log_info "Installing dependencies..."
+    start_timer
+    log_timed_info "Installing dependencies..."
 
     local deps=()
     local dev_deps=()
@@ -284,7 +295,8 @@ install_dependencies() {
         fi
     fi
 
-    log_success "Dependencies installed"
+    stop_timer
+    log_timed_success "Dependencies installed"
 }
 
 # Create project structure

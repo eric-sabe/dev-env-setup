@@ -29,6 +29,12 @@ log_error() {
     echo -e "${RED}❌ $1${NC}"
 }
 
+# Source utility scripts
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UTIL_DIR="${SCRIPT_DIR%/quickstart*/}/utils"
+[[ -f "$UTIL_DIR/cross-platform.sh" ]] && source "$UTIL_DIR/cross-platform.sh"
+[[ -f "$UTIL_DIR/idempotency.sh" ]] && source "$UTIL_DIR/idempotency.sh"
+
 # Show usage
 usage() {
     echo "Usage: $0 <project-name> [maven|gradle] [java-version]"
@@ -105,7 +111,8 @@ create_maven_project() {
     local project_name=$1
     local java_version=${2:-17}
 
-    log_info "Creating Maven project: $project_name"
+    start_timer "maven_project_creation"
+    log_timed_info "maven_project_creation" "Creating Maven project: $project_name"
 
     # Create project directory
     mkdir -p "$project_name"
@@ -333,7 +340,8 @@ build/
 Thumbs.db
 EOF
 
-    log_success "Maven project created successfully"
+    stop_timer "maven_project_creation"
+    log_timed_success "maven_project_creation" "Maven project created successfully"
 }
 
 # Create Gradle project
@@ -341,7 +349,8 @@ create_gradle_project() {
     local project_name=$1
     local java_version=${2:-17}
 
-    log_info "Creating Gradle project: $project_name"
+    start_timer "gradle_project_creation"
+    log_timed_info "gradle_project_creation" "Creating Gradle project: $project_name"
 
     # Create project directory
     mkdir -p "$project_name"
@@ -538,7 +547,8 @@ build/
 Thumbs.db
 EOF
 
-    log_success "Gradle project created successfully"
+    stop_timer "gradle_project_creation"
+    log_timed_success "gradle_project_creation" "Gradle project created successfully"
 }
 
 # Main function

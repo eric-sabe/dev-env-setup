@@ -48,7 +48,8 @@ check_privileges() {
 
 # Update system packages
 update_system() {
-    log_info "Updating system packages..."
+    start_timer
+    log_timed_info "Updating system packages..."
 
     case $DISTRO in
         ubuntu|debian|pop|elementary|linuxmint)
@@ -73,12 +74,14 @@ update_system() {
             ;;
     esac
 
-    log_success "System updated"
+    stop_timer
+    log_timed_success "System updated"
 }
 
 # Install development tools
 install_dev_tools() {
-    log_info "Installing development tools..."
+    start_timer
+    log_timed_info "Installing development tools..."
 
     case $DISTRO in
         ubuntu|debian|pop|elementary|linuxmint)
@@ -97,12 +100,14 @@ install_dev_tools() {
             ;;
     esac
 
-    log_success "Development tools installed"
+    stop_timer
+    log_timed_success "Development tools installed"
 }
 
 # Install Python and pyenv
 install_python() {
-    log_info "Setting up Python environment..."
+    start_timer
+    log_timed_info "Setting up Python environment..."
 
     # Install pyenv dependencies
     case $DISTRO in
@@ -143,12 +148,14 @@ install_python() {
     pipx install virtualenv
     pipx install pipenv
 
-    log_success "Python environment configured"
+    stop_timer
+    log_timed_success "Python environment configured"
 }
 
 # Install Node.js and nvm
 install_nodejs() {
-    log_info "Setting up Node.js environment..."
+    start_timer
+    log_timed_info "Setting up Node.js environment..."
 
     # Install nvm
     if [[ ! -d "$HOME/.nvm" ]]; then
@@ -172,12 +179,14 @@ install_nodejs() {
     npm install -g npm@latest
     npm install -g yarn pnpm typescript @types/node
 
-    log_success "Node.js environment configured"
+    stop_timer
+    log_timed_success "Node.js environment configured"
 }
 
 # Install Java and SDKMAN
 install_java() {
-    log_info "Setting up Java environment..."
+    start_timer
+    log_timed_info "Setting up Java environment..."
 
     # Install SDKMAN
     if [[ ! -d "$HOME/.sdkman" ]]; then
@@ -199,12 +208,14 @@ install_java() {
     sdk install maven || log_warning "Maven already installed or failed to install"
     sdk install gradle || log_warning "Gradle already installed or failed to install"
 
-    log_success "Java environment configured"
+    stop_timer
+    log_timed_success "Java environment configured"
 }
 
 # Install C++ tools
 install_cpp() {
-    log_info "Setting up C++ development environment..."
+    start_timer
+    log_timed_info "Setting up C++ development environment..."
 
     case $DISTRO in
         ubuntu|debian|pop|elementary|linuxmint)
@@ -224,12 +235,14 @@ install_cpp() {
             ;;
     esac
 
-    log_success "C++ environment configured"
+    stop_timer
+    log_timed_success "C++ environment configured"
 }
 
 # Install databases
 install_databases() {
-    log_info "Installing database tools..."
+    start_timer
+    log_timed_info "Installing database tools..."
 
     case $DISTRO in
         ubuntu|debian|pop|elementary|linuxmint)
@@ -302,12 +315,14 @@ install_databases() {
     # Install database client tools
     pip install --user pgcli mycli
 
-    log_success "Database tools installed"
+    stop_timer
+    log_timed_success "Database tools installed"
 }
 
 # Install Docker
 install_docker() {
-    log_info "Installing Docker..."
+    start_timer
+    log_timed_info "Installing Docker..."
 
     case $DISTRO in
         ubuntu|debian|pop|elementary|linuxmint)
@@ -345,12 +360,14 @@ install_docker() {
             ;;
     esac
 
-    log_success "Docker installed"
+    stop_timer
+    log_timed_success "Docker installed"
 }
 
 # Install IDEs
 install_ides() {
-    log_info "Installing IDEs..."
+    start_timer
+    log_timed_info "Installing IDEs..."
 
     case $DISTRO in
         ubuntu|debian|pop|elementary|linuxmint)
@@ -377,12 +394,14 @@ install_ides() {
             ;;
     esac
 
-    log_success "IDEs installed"
+    stop_timer
+    log_timed_success "IDEs installed"
 }
 
 # Configure shell environment
 configure_shell() {
-    log_info "Configuring shell environment..."
+    start_timer
+    log_timed_info "Configuring shell environment..."
 
     local shell_rc="$HOME/.bashrc"
 
@@ -422,22 +441,26 @@ configure_shell() {
         echo 'alias mkvenv="python -m venv venv && activate"' >> "$shell_rc"
     fi
 
-    log_success "Shell environment configured"
+    stop_timer
+    log_timed_success "Shell environment configured"
 }
 
 # Create development directory structure
 create_dev_structure() {
-    log_info "Creating development directory structure..."
+    start_timer
+    log_timed_info "Creating development directory structure..."
 
     mkdir -p ~/dev/{current,archive,tools,backups}
     mkdir -p ~/dev/current/{python,nodejs,java,cpp,web,mobile}
 
-    log_success "Development directories created"
+    stop_timer
+    log_timed_success "Development directories created"
 }
 
 # Verify installation
 verify_installation() {
-    log_info "Verifying installation..."
+    start_timer
+    log_timed_info "Verifying installation..."
 
     local errors=0
 
@@ -473,8 +496,9 @@ verify_installation() {
         ((errors++))
     fi
 
+    stop_timer
     if [[ $errors -eq 0 ]]; then
-        log_success "All tools verified successfully!"
+        log_timed_success "All tools verified successfully!"
     else
         log_warning "$errors tools failed verification. You may need to restart your terminal or check the installation logs."
     fi

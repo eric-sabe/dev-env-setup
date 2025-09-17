@@ -101,7 +101,8 @@ install_eclipse() {
     local eclipse_type=$1
     local install_dir="$HOME/dev/tools/eclipse"
 
-    log_info "Installing Eclipse $eclipse_type (version $ECLIPSE_VERSION_Y) ..."
+    start_timer
+    log_timed_info "Installing Eclipse $eclipse_type (version $ECLIPSE_VERSION_Y) ..."
 
     # Create installation directory
     mkdir -p "$install_dir"
@@ -206,7 +207,8 @@ install_eclipse() {
     # Create desktop shortcut/symlink
     create_shortcut "$install_dir" "$eclipse_type"
 
-    log_success "Eclipse $eclipse_type installed to $install_dir"
+    stop_timer
+    log_timed_success "Eclipse $eclipse_type installed to $install_dir"
 }
 
 # Create desktop shortcut or symlink
@@ -279,7 +281,8 @@ install_plugins() {
     local eclipse_type=$1
     local install_dir="$HOME/dev/tools/eclipse"
 
-    log_info "Installing Eclipse plugins..."
+    start_timer
+    log_timed_info "Installing Eclipse plugins..."
 
     # Create plugin installation script
     local plugin_script="$install_dir/install-plugins.sh"
@@ -306,7 +309,8 @@ EOF
 
     chmod +x "$plugin_script"
 
-    log_info "Plugin installation script created: $plugin_script"
+    stop_timer
+    log_timed_info "Plugin installation script created: $plugin_script"
     log_info "Run this script after starting Eclipse for the first time"
 }
 

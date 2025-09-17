@@ -141,7 +141,8 @@ get_project_info() {
 
 # Create project directory
 create_project_directory() {
-    log_info "Creating project directory: $PROJECT_NAME"
+    start_timer
+    log_timed_info "Creating project directory: $PROJECT_NAME"
 
     if [[ -d "$PROJECT_NAME" ]]; then
         log_error "Directory '$PROJECT_NAME' already exists"
@@ -151,13 +152,15 @@ create_project_directory() {
     mkdir -p "$PROJECT_NAME"
     cd "$PROJECT_NAME"
 
-    log_success "Project directory created"
+    stop_timer
+    log_timed_success "Project directory created"
 }
 
 # Create virtual environment
 create_virtual_environment() {
     if [[ "$CREATE_VENV" == "true" ]]; then
-        log_info "Creating virtual environment..."
+        start_timer
+        log_timed_info "Creating virtual environment..."
 
         python3 -m venv venv
 
@@ -167,13 +170,15 @@ create_virtual_environment() {
         # Upgrade pip
         pip install --upgrade pip
 
-        log_success "Virtual environment created and activated"
+        stop_timer
+        log_timed_success "Virtual environment created and activated"
     fi
 }
 
 # Create project structure
 create_project_structure() {
-    log_info "Creating project structure..."
+    start_timer
+    log_timed_info "Creating project structure..."
 
     # Create directories
     mkdir -p src tests docs scripts
@@ -210,7 +215,8 @@ create_project_structure() {
     # Create configuration files
     create_config_files
 
-    log_success "Project structure created"
+    stop_timer
+    log_timed_success "Project structure created"
 }
 
 # Create Web API files
@@ -1610,20 +1616,24 @@ EOF
 
 # Install dependencies
 install_dependencies() {
-    log_info "Installing dependencies..."
+    start_timer
+    log_timed_info "Installing dependencies..."
 
     if [[ -f "requirements.txt" ]]; then
         pip install -r requirements.txt
-        log_success "Dependencies installed"
+        stop_timer
+        log_timed_success "Dependencies installed"
     else
         log_warning "No requirements.txt found"
+        stop_timer
     fi
 }
 
 # Initialize git repository
 initialize_git() {
     if [[ -n "$GIT_REPO" ]]; then
-        log_info "Initializing Git repository..."
+        start_timer
+        log_timed_info "Initializing Git repository..."
 
         git init
         git add .
@@ -1634,7 +1644,8 @@ initialize_git() {
             log_info "Added remote origin: $GIT_REPO"
         fi
 
-        log_success "Git repository initialized"
+        stop_timer
+        log_timed_success "Git repository initialized"
     fi
 }
 

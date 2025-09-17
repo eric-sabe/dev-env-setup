@@ -29,17 +29,20 @@ check_wsl() {
 
 # Update WSL Ubuntu system
 update_system() {
-    log_info "Updating WSL Ubuntu system..."
+    start_timer
+    log_timed_info "Updating WSL Ubuntu system..."
 
     sudo apt update && sudo apt upgrade -y
     sudo apt install -y software-properties-common apt-transport-https ca-certificates curl wget gnupg lsb-release
 
-    log_success "System updated"
+    stop_timer
+    log_timed_success "System updated"
 }
 
 # Install development tools
 install_dev_tools() {
-    log_info "Installing development tools..."
+    start_timer
+    log_timed_info "Installing development tools..."
 
     sudo apt install -y build-essential git cmake htop tree jq unzip zip
     sudo apt install -y linux-tools-generic  # For perf, etc.
@@ -47,12 +50,14 @@ install_dev_tools() {
     # Install Windows integration tools
     sudo apt install -y wslu  # Windows System for Linux Utilities
 
-    log_success "Development tools installed"
+    stop_timer
+    log_timed_success "Development tools installed"
 }
 
 # Install Python and pyenv
 install_python() {
-    log_info "Setting up Python environment..."
+    start_timer
+    log_timed_info "Setting up Python environment..."
 
     # Install pyenv dependencies
     sudo apt install -y libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev llvm libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
@@ -80,12 +85,14 @@ install_python() {
     pipx install virtualenv
     pipx install pipenv
 
-    log_success "Python environment configured"
+    stop_timer
+    log_timed_success "Python environment configured"
 }
 
 # Install Node.js and nvm
 install_nodejs() {
-    log_info "Setting up Node.js environment..."
+    start_timer
+    log_timed_info "Setting up Node.js environment..."
 
     # Install nvm
     if [[ ! -d "$HOME/.nvm" ]]; then
