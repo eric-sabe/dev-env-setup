@@ -1,10 +1,17 @@
 #Requires -Version 5.1
 # Windows Development Environment Setup Script
 # Comprehensive setup for CS students - Windows 11 with WSL2
+#
+# Usage:
+#   .\setup-windows.ps1                    # Install everything
+#   .\setup-windows.ps1 -SkipWSLInstall    # Skip WSL2 installation
+#   .\setup-windows.ps1 -SkipWindowsTools  # Skip Windows tools installation
+#   .\setup-windows.ps1 -Uninstall         # Remove everything installed by this script
 
 param(
     [switch]$SkipWSLInstall,
-    [switch]$SkipWindowsTools
+    [switch]$SkipWindowsTools,
+    [switch]$Uninstall
 )
 
 # Import required modules
@@ -495,6 +502,193 @@ function Test-Installation {
     }
 }
 
+# Uninstall development environment
+function Uninstall-DevEnvironment {
+    Write-Host "🗑️  Uninstalling Windows Development Environment" -ForegroundColor Red
+    Write-Host "=================================================" -ForegroundColor Red
+
+    # Check prerequisites
+    if (!(Test-Administrator)) {
+        Write-Error "This script must be run as Administrator to uninstall"
+        exit 1
+    }
+
+    # Check for Parallels ARM64 mode
+    if (Test-ParallelsAppleSilicon) {
+        $script:IsParallelsARM64 = $true
+    }
+
+    Write-Warning "This will remove all development tools and configurations installed by this script."
+    Write-Host ""
+    Write-Host "The following will be removed:" -ForegroundColor Yellow
+    Write-Host "• Chocolatey package manager" -ForegroundColor Yellow
+    Write-Host "• All development tools (Git, VS Code, Python, Node.js, Java, etc.)" -ForegroundColor Yellow
+    if (!$script:IsParallelsARM64) {
+        Write-Host "• WSL2 and Ubuntu (if installed)" -ForegroundColor Yellow
+    } else {
+        Write-Host "• WSL2/Ubuntu (not applicable in Parallels ARM64 mode)" -ForegroundColor Cyan
+    }
+    Write-Host "• Development directories and configurations (optional)" -ForegroundColor Yellow
+    Write-Host "• Environment variable modifications" -ForegroundColor Yellow
+    Write-Host ""
+    $confirm = Read-Host "Are you sure you want to continue? Type 'YES' to confirm"
+    if ($confirm -ne "YES") {
+        Write-Info "Uninstallation cancelled."
+        exit 0
+    }
+
+    Write-Host ""
+    Write-Host "Starting uninstallation..." -ForegroundColor Red
+
+    # Remove Chocolatey packages (skip critical system tools)
+    Write-Info "Removing Chocolatey packages..."
+    $tools = @(
+        "vscode",
+        "eclipse",
+        "python",
+        "nodejs",
+        "openjdk",
+        "maven",
+        "gradle",
+        "docker-desktop",
+        "postman",
+        "gitkraken",
+        "microsoft-windows-terminal",
+        "powershell-core"
+    )
+
+    # Note: We skip 'git' as it might be used by other applications
+    Write-Warning "Note: Keeping Git installed as it may be used by other applications"
+    Write-Info "To remove Git manually: choco uninstall git -y"
+
+    $removedCount = 0
+    $failedCount = 0
+
+    foreach ($tool in $tools) {
+        try {
+            $result = choco uninstall $tool -y --limit-output 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "Removed $tool"
+                $removedCount++
+            } else {
+                Write-Info "$tool not installed or already removed"
+            }
+        }
+        catch {
+            Write-Warning "Could not remove $tool"
+            $failedCount++
+        }
+    }
+
+    # Remove Chocolatey itself
+    Write-Info "Removing Chocolatey..."
+    try {
+        $chocoPath = "$env:ChocolateyInstall"
+        if (Test-Path $chocoPath) {
+            Remove-Item -Path $chocoPath -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Success "Removed Chocolatey"
+        } else {
+            Write-Info "Chocolatey not found"
+        }
+    }
+    catch {
+        Write-Warning "Could not remove Chocolatey completely"
+    }
+
+    # Remove WSL2 and Ubuntu (if not in Parallels ARM64)
+    if (!$script:IsParallelsARM64) {
+        Write-Info "Removing WSL2 and Ubuntu..."
+        try {
+            # Check if WSL is available before trying to remove
+            if (Get-Command wsl -ErrorAction SilentlyContinue) {
+                # Remove Ubuntu
+                wsl --unregister Ubuntu 2>$null
+                wsl --unregister Ubuntu-22.04 2>$null
+                Write-Success "Removed Ubuntu WSL"
+            }
+
+            # Disable WSL features
+            dism.exe /online /disable-feature /featurename:Microsoft-Windows-Subsystem-Linux /norestart
+            dism.exe /online /disable-feature /featurename:VirtualMachinePlatform /norestart
+            Write-Success "Disabled WSL2 features"
+        }
+        catch {
+            Write-Warning "Could not remove WSL2/Ubuntu (may not be installed)"
+        }
+    } else {
+        Write-Info "Skipping WSL2 removal (was not installed in Parallels ARM64 mode)"
+    }
+
+    # Clean up environment variables
+    Write-Info "Cleaning up environment variables..."
+    try {
+        # Remove common paths that might have been added
+        $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        $pathsToRemove = @(
+            "$env:ChocolateyInstall\bin",
+            "$env:ProgramFiles\Microsoft VS Code\bin",
+            "$env:ProgramFiles\Git\bin",
+            "$env:ProgramFiles\Git\cmd",
+            "$env:ProgramFiles\nodejs",
+            "$env:ProgramFiles\Python*\Scripts",
+            "$env:ProgramFiles\Python*\",
+            "$env:ProgramFiles\Java\*\bin",
+            "$env:ProgramFiles\Maven\*\bin",
+            "$env:ProgramFiles\Gradle\*\bin"
+        )
+
+        $newPath = $currentPath
+        foreach ($path in $pathsToRemove) {
+            $newPath = $newPath -replace [regex]::Escape($path + ";"), ""
+            $newPath = $newPath -replace [regex]::Escape($path), ""
+        }
+
+        [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+        Write-Success "Cleaned up PATH environment variable"
+    }
+    catch {
+        Write-Warning "Could not clean up environment variables"
+    }
+
+    # Remove development directories (optional)
+    Write-Host ""
+    $removeDirs = Read-Host "Remove development directories (~/dev, ~/projects, etc.)? (y/N)"
+    if ($removeDirs -eq "y" -or $removeDirs -eq "Y") {
+        Write-Info "Removing development directories..."
+        $devDirs = @(
+            "$env:USERPROFILE\dev",
+            "$env:USERPROFILE\projects",
+            "$env:USERPROFILE\workspace",
+            "$env:USERPROFILE\development"
+        )
+
+        foreach ($dir in $devDirs) {
+            if (Test-Path $dir) {
+                try {
+                    Remove-Item -Path $dir -Recurse -Force
+                    Write-Success "Removed $dir"
+                }
+                catch {
+                    Write-Warning "Could not remove $dir"
+                }
+            }
+        }
+    }
+
+    # Final summary
+    Write-Host ""
+    Write-Host "🗑️  Uninstallation Complete!" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Summary:" -ForegroundColor Cyan
+    Write-Host "✅ Packages removed: $removedCount" -ForegroundColor Green
+    Write-Host "⚠️  Failed removals: $failedCount" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Note: Some files may remain if they were in use during uninstallation." -ForegroundColor Yellow
+    Write-Host "You may need to restart your computer for all changes to take effect." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "To reinstall, run: .\setup-windows.ps1" -ForegroundColor Blue
+}
+
 # Main installation function
 function Install-DevEnvironment {
     if ($script:IsParallelsARM64) {
@@ -606,5 +800,9 @@ function Install-DevEnvironment {
     Write-Host "Happy coding!" -ForegroundColor Blue
 }
 
-# Run main function
-Install-DevEnvironment
+# Main execution logic
+if ($Uninstall) {
+    Uninstall-DevEnvironment
+} else {
+    Install-DevEnvironment
+}
