@@ -50,6 +50,25 @@ cd C:\path\to\dev-scripts
 .\setup\windows\setup-windows.ps1
 ```
 
+> PowerShell execution policy
+
+If you see "running scripts is disabled on this system", use one of these:
+
+```powershell
+# Safest: applies only to this shell session
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+Unblock-File .\setup\windows\setup-windows.ps1
+.\setup\windows\setup-windows.ps1
+
+# Or persist for your user (typical on dev machines)
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
+Unblock-File .\setup\windows\setup-windows.ps1
+.\setup\windows\setup-windows.ps1
+
+# Single-shot without changing policy
+powershell -NoProfile -ExecutionPolicy Bypass -File .\setup\windows\setup-windows.ps1
+```
+
 **Step 2 - WSL Setup** (Inside WSL Ubuntu):
 ```bash
 cd ~/dev-scripts

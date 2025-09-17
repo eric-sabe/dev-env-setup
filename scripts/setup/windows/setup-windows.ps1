@@ -17,22 +17,22 @@ function Test-Administrator {
 # Logging functions
 function Write-Info {
     param([string]$Message)
-    Write-Host "ℹ️  $Message" -ForegroundColor Blue
+    Write-Host "[INFO] $Message" -ForegroundColor Blue
 }
 
 function Write-Success {
     param([string]$Message)
-    Write-Host "✅ $Message" -ForegroundColor Green
+    Write-Host "[OK] $Message" -ForegroundColor Green
 }
 
 function Write-Warning {
     param([string]$Message)
-    Write-Host "⚠️  $Message" -ForegroundColor Yellow
+    Write-Host "[WARN] $Message" -ForegroundColor Yellow
 }
 
 function Write-Error {
     param([string]$Message)
-    Write-Host "❌ $Message" -ForegroundColor Red
+    Write-Host "[ERROR] $Message" -ForegroundColor Red
 }
 
 # Check Windows version
@@ -260,10 +260,10 @@ function Test-Installation {
     foreach ($tool in $windowsTools) {
         try {
             $null = Get-Command $tool -ErrorAction Stop
-            Write-Success "$tool`: found"
+            Write-Success "$tool: found"
         }
         catch {
-            Write-Error "$tool`: NOT FOUND"
+            Write-Error "$tool: NOT FOUND"
             $errors++
         }
     }
@@ -277,7 +277,7 @@ function Test-Installation {
 
 # Main installation function
 function Install-DevEnvironment {
-    Write-Host "🚀 Setting up Windows Development Environment" -ForegroundColor Blue
+    Write-Host "Setting up Windows Development Environment" -ForegroundColor Blue
     Write-Host "===============================================" -ForegroundColor Blue
 
     # Check prerequisites
@@ -299,7 +299,7 @@ function Install-DevEnvironment {
     Test-Installation
 
     Write-Host ""
-    Write-Host "🎉 Windows development environment setup complete!" -ForegroundColor Green
+    Write-Host "Windows development environment setup complete!" -ForegroundColor Green
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor Yellow
     Write-Host "1. Restart your computer to complete WSL2 installation"
@@ -308,7 +308,7 @@ function Install-DevEnvironment {
     Write-Host "4. Install VS Code extensions for your languages"
     Write-Host "5. Use the quickstart scripts to create new projects"
     Write-Host ""
-    Write-Host "Happy coding! 🎯" -ForegroundColor Blue
+    Write-Host "Happy coding!" -ForegroundColor Blue
 }
 
 # Run main function
