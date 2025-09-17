@@ -452,12 +452,20 @@ function Install-WindowsTools {
         [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
         
         try {
-            Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+            # Use Invoke-WebRequest and Invoke-Expression separately to avoid variable conflicts
+            Write-Info "Downloading Chocolatey installation script..."
+            $chocoInstallScript = (New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')
+            
+            Write-Info "Running Chocolatey installation..."
+            # Execute in a separate scope to avoid variable conflicts
+            & {
+                Invoke-Expression $chocoInstallScript
+            }
             
             # Verify installation succeeded
             Start-Sleep -Seconds 3
-            $chocoTest = choco --version 2>$null
-            if ($LASTEXITCODE -eq 0 -and $chocoTest) {
+            $chocoVerifyTest = choco --version 2>$null
+            if ($LASTEXITCODE -eq 0 -and $chocoVerifyTest) {
                 Write-Success "Chocolatey installed successfully"
                 
                 # Try to import Chocolatey profile to enable refreshenv in current session
