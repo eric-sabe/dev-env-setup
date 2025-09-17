@@ -67,6 +67,37 @@ function Write-Error {
     Write-Host "[ERROR] $Message" -ForegroundColor Red
 }
 
+# Timing functions
+function Start-Timer {
+    param([string]$Operation)
+    $global:StepStartTime = Get-Date
+    Write-Info "Starting: $Operation"
+}
+
+function Stop-Timer {
+    param([string]$Operation)
+    if ($global:StepStartTime) {
+        $elapsed = (Get-Date) - $global:StepStartTime
+        $seconds = [math]::Round($elapsed.TotalSeconds, 1)
+        Write-Success "Completed: $Operation (${seconds}s)"
+        $global:StepStartTime = $null
+    } else {
+        Write-Success "Completed: $Operation"
+    }
+}
+
+function Write-TimedInfo {
+    param([string]$Message)
+    $timestamp = Get-Date -Format "HH:mm:ss"
+    Write-Host "[$timestamp] [INFO] $Message" -ForegroundColor Blue
+}
+
+function Write-TimedSuccess {
+    param([string]$Message)
+    $timestamp = Get-Date -Format "HH:mm:ss"
+    Write-Host "[$timestamp] [OK] $Message" -ForegroundColor Green
+}
+
 # Check Windows version
 function Test-WindowsVersion {
     $osInfo = Get-ComputerInfo
@@ -121,7 +152,7 @@ function Enable-WSL2 {
         return
     }
 
-    Write-Info "Enabling WSL2 feature..."
+    Start-Timer "WSL2 feature enablement"
 
     # Check if WSL is already enabled
     $wslFeature = Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux
@@ -130,13 +161,13 @@ function Enable-WSL2 {
     $needsRestart = $false
 
     if ($wslFeature.State -ne "Enabled") {
-        Write-Info "Enabling Windows Subsystem for Linux..."
+        Write-TimedInfo "Enabling Windows Subsystem for Linux..."
         dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
         $needsRestart = $true
     }
 
     if ($vmFeature.State -ne "Enabled") {
-        Write-Info "Enabling Virtual Machine Platform..."
+        Write-TimedInfo "Enabling Virtual Machine Platform..."
         dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
         $needsRestart = $true
     }
@@ -211,7 +242,7 @@ nestedVirtualization=true
         Write-Info "WSL not ready yet. Will set default version after restart."
     }
 
-    Write-Success "WSL2 features enabled"
+    Stop-Timer "WSL2 feature enablement"
 }
 
 # Install Ubuntu WSL2
@@ -221,7 +252,7 @@ function Install-UbuntuWSL {
         return
     }
 
-    Write-Info "Installing Ubuntu WSL2..."
+    Start-Timer "Ubuntu WSL2 installation"
 
     # Check if WSL is working and VM Platform is ready
     try {
@@ -387,6 +418,7 @@ function Install-UbuntuWSL {
 
         Write-Info "Please complete the Ubuntu setup (username/password) when prompted"
         Write-Info "You can start Ubuntu by running: wsl"
+        Stop-Timer "Ubuntu WSL2 installation"
     }
     catch {
         if ($_.Exception.Message -match "0x80370102") {
@@ -407,7 +439,7 @@ function Install-WindowsTools {
         return
     }
 
-    Write-Info "Installing Windows development tools..."
+    Start-Timer "Windows development tools installation"
 
     # Install Chocolatey if not present or corrupted
     $chocoWorking = $false
@@ -416,13 +448,14 @@ function Install-WindowsTools {
         $chocoTest = choco --version 2>$null
         if ($LASTEXITCODE -eq 0 -and $chocoTest) {
             $chocoWorking = $true
-            Write-Success "Chocolatey is already installed and working"
+            Write-TimedSuccess "Chocolatey is already installed and working"
         }
     } catch {
         $chocoWorking = $false
     }
     
     if (-not $chocoWorking) {
+        Start-Timer "Chocolatey installation"
         # Check for corrupted installation
         $chocoFolderExists = Test-Path "$env:ProgramData\chocolatey"
         if ($chocoFolderExists) {
@@ -466,7 +499,8 @@ function Install-WindowsTools {
             Start-Sleep -Seconds 3
             $chocoVerifyTest = choco --version 2>$null
             if ($LASTEXITCODE -eq 0 -and $chocoVerifyTest) {
-                Write-Success "Chocolatey installed successfully"
+                Write-TimedSuccess "Chocolatey installed successfully"
+                Stop-Timer "Chocolatey installation"
                 
                 # Try to import Chocolatey profile to enable refreshenv in current session
                 if ($env:ChocolateyInstall) {
@@ -580,7 +614,7 @@ function Install-WindowsTools {
     }
 
     Write-Host ""
-    Write-Success "Windows tools installation completed: $successCount successful, $failCount failed"
+    Stop-Timer "Windows development tools installation"
     
     if ($failCount -gt 0) {
         Write-Warning "Some tools failed to install. This may be due to pending system reboot."
@@ -1019,6 +1053,7 @@ function Uninstall-DevEnvironment {
 
 # Main installation function
 function Install-DevEnvironment {
+    $scriptStartTime = Get-Date
     Write-Host "Setting up Windows Development Environment" -ForegroundColor Blue
     Write-Host "==========================================" -ForegroundColor Blue
 
@@ -1031,7 +1066,7 @@ function Install-DevEnvironment {
     Test-WindowsVersion
 
     # Install all components
-    Write-Info "Installing full development environment..."
+    Start-Timer "Complete development environment setup"
     
     # Enable WSL2 first (may require restart)
     Enable-WSL2
@@ -1058,10 +1093,16 @@ function Install-DevEnvironment {
     Test-Installation
 
     Write-Host ""
-    Write-Host "Windows development environment setup complete!" -ForegroundColor Green
+    Stop-Timer "Complete development environment setup"
+    
+    # Calculate total time
+    $totalElapsed = (Get-Date) - $scriptStartTime
+    $totalMinutes = [math]::Round($totalElapsed.TotalMinutes, 1)
     Write-Host ""
+    Write-Host "Total setup time: ${totalMinutes} minutes" -ForegroundColor Cyan
 
     # Next steps
+    Write-Host ""
     Write-Host "Windows Development Environment Setup Complete" -ForegroundColor Green
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor Yellow
