@@ -40,17 +40,25 @@ log_header() {
     echo -e "${PURPLE}$(printf '%.0s=' {1..50})${NC}"
 }
 
+# Source utility scripts
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UTIL_DIR="${SCRIPT_DIR%/quickstart*/}/utils"
+[[ -f "$UTIL_DIR/cross-platform.sh" ]] && source "$UTIL_DIR/cross-platform.sh"
+[[ -f "$UTIL_DIR/idempotency.sh" ]] && source "$UTIL_DIR/idempotency.sh"
+
 # Check prerequisites
 check_prerequisites() {
     log_info "Checking prerequisites..."
 
-    if ! command -v python3 &>/dev/null; then
-        log_error "Python 3 is not installed. Please install it first."
+    # Check Python 3
+    if ! ensure_command python3 "Python 3"; then
+        log_error "Python 3 is required. Please install it first."
         exit 1
     fi
 
-    if ! command -v pip3 &>/dev/null; then
-        log_error "pip3 is not installed. Please install it first."
+    # Check pip3
+    if ! ensure_command pip3 "pip3"; then
+        log_error "pip3 is required. Please install it first."
         exit 1
     fi
 

@@ -20,6 +20,10 @@ if [[ -f "$UTIL_DIR/version-resolver.sh" ]]; then
     # shellcheck source=../utils/version-resolver.sh
     source "$UTIL_DIR/version-resolver.sh"
 fi
+if [[ -f "$UTIL_DIR/idempotency.sh" ]]; then
+    # shellcheck source=../utils/idempotency.sh
+    source "$UTIL_DIR/idempotency.sh"
+fi
 
 VSCODE_CHANNEL="stable" # placeholder; future manifest integration
 

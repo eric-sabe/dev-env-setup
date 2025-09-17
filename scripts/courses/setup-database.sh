@@ -15,6 +15,7 @@ UTIL_DIR="${SCRIPT_DIR%/courses*/}/utils"
 [[ -f "$UTIL_DIR/cross-platform.sh" ]] && source "$UTIL_DIR/cross-platform.sh"
 [[ -f "$UTIL_DIR/verify.sh" ]] && source "$UTIL_DIR/verify.sh"
 [[ -f "$UTIL_DIR/version-resolver.sh" ]] && source "$UTIL_DIR/version-resolver.sh"
+[[ -f "$UTIL_DIR/idempotency.sh" ]] && source "$UTIL_DIR/idempotency.sh"
 
 # Colors for output
 RED='\033[0;31m'
@@ -110,44 +111,56 @@ detect_platform() {
 
 # Install PostgreSQL
 install_postgresql() {
+    log_info "Checking PostgreSQL installation..."
+
+    # Check if PostgreSQL is already installed and running
+    if is_command_available psql && is_service_running postgresql; then
+        log_success "PostgreSQL already installed and running"
+        return 0
+    fi
+
     log_info "Installing PostgreSQL..."
 
     case $PLATFORM in
         macos)
-            brew install postgresql
+            ensure_brew_package postgresql "PostgreSQL"
             brew services start postgresql
             ;;
         ubuntu)
-            sudo apt install -y postgresql postgresql-contrib
-            sudo systemctl enable postgresql
-            sudo systemctl start postgresql
+            ensure_apt_package postgresql "PostgreSQL"
+            ensure_apt_package postgresql-contrib "PostgreSQL contrib"
+            ensure_service_running postgresql "PostgreSQL"
             ;;
         redhat)
             if [[ -f /etc/fedora-release ]]; then
-                sudo dnf install -y postgresql-server postgresql-contrib
+                ensure_yum_package postgresql-server "PostgreSQL server"
+                ensure_yum_package postgresql-contrib "PostgreSQL contrib"
                 sudo postgresql-setup --initdb
             else
-                sudo yum install -y postgresql-server postgresql-contrib
+                ensure_yum_package postgresql-server "PostgreSQL server"
+                ensure_yum_package postgresql-contrib "PostgreSQL contrib"
                 sudo postgresql-setup initdb
             fi
-            sudo systemctl enable postgresql
-            sudo systemctl start postgresql
+            ensure_service_running postgresql "PostgreSQL"
             ;;
         arch)
-            sudo pacman -S --noconfirm postgresql
+            ensure_pacman_package postgresql "PostgreSQL"
             sudo -u postgres initdb -D /var/lib/postgres/data
-            sudo systemctl enable postgresql
-            sudo systemctl start postgresql
+            ensure_service_running postgresql "PostgreSQL"
             ;;
         windows)
             log_info "Please install PostgreSQL manually from https://www.postgresql.org/download/windows/"
             ;;
     esac
 
-    # Configure PostgreSQL
-    if [[ "$PLATFORM" != "windows" ]]; then
-        # Create database user
-        sudo -u postgres createuser --createdb --superuser "$USER" 2>/dev/null || log_warning "User may already exist"
+    # Verify installation
+    if is_command_available psql; then
+        log_success "PostgreSQL installed successfully"
+    else
+        log_error "PostgreSQL installation failed"
+        return 1
+    fi
+}
         # Create default database
         createdb "$USER" 2>/dev/null || log_warning "Database may already exist"
     fi
@@ -157,35 +170,46 @@ install_postgresql() {
 
 # Install MySQL/MariaDB
 install_mysql() {
+    log_info "Checking MySQL/MariaDB installation..."
+
+    # Check if MySQL/MariaDB is already installed and running
+    if (is_command_available mysql || is_command_available mariadb) && (is_service_running mysql || is_service_running mariadb); then
+        log_success "MySQL/MariaDB already installed and running"
+        return 0
+    fi
+
     log_info "Installing MySQL/MariaDB..."
 
     case $PLATFORM in
         macos)
-            brew install mysql
+            ensure_brew_package mysql "MySQL"
             brew services start mysql
             ;;
         ubuntu)
-            sudo apt install -y mysql-server
-            sudo systemctl enable mysql
-            sudo systemctl start mysql
+            ensure_apt_package mysql-server "MySQL Server"
+            ensure_service_running mysql "MySQL"
             ;;
         redhat)
-            sudo yum install -y mariadb-server
-            sudo systemctl enable mariadb
-            sudo systemctl start mariadb
+            ensure_yum_package mariadb-server "MariaDB Server"
+            ensure_service_running mariadb "MariaDB"
             ;;
         arch)
-            sudo pacman -S --noconfirm mariadb
+            ensure_pacman_package mariadb "MariaDB"
             sudo mariadb-install-db --user=mysql --basedir=/usr --datadir=/var/lib/mysql
-            sudo systemctl enable mariadb
-            sudo systemctl start mariadb
+            ensure_service_running mariadb "MariaDB"
             ;;
         windows)
             log_info "Please install MySQL manually from https://dev.mysql.com/downloads/mysql/"
             ;;
     esac
 
-    log_success "MySQL/MariaDB installed"
+    # Verify installation
+    if is_command_available mysql || is_command_available mariadb; then
+        log_success "MySQL/MariaDB installed successfully"
+    else
+        log_error "MySQL/MariaDB installation failed"
+        return 1
+    fi
 }
 
 # Optional MySQL secure installation (interactive guidance or automated)

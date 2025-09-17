@@ -240,48 +240,61 @@ function Install-WindowsTools {
         $toolName = $tool.name
         $fallback = $tool.fallback
         $description = $tool.description
-        
-        Write-Info "Installing $toolName ($description)..."
-        
-        $installed = $false
-        
-        # Try main package first
+
+        Write-Info "Checking $description..."
+
+        # Check if tool is already installed
+        $alreadyInstalled = $false
         try {
-            $result = choco install $toolName -y --limit-output
-            if ($LASTEXITCODE -eq 0) {
-                Write-Success "$toolName installed successfully"
-                $installed = $true
-                $successCount++
-            } else {
-                throw "Chocolatey exit code: $LASTEXITCODE"
-            }
+            $null = Get-Command $toolName -ErrorAction Stop
+            Write-Success "$description already installed"
+            $alreadyInstalled = $true
+            $successCount++
         }
         catch {
-            Write-Warning "Failed to install $toolName"
-            
-            # Try fallback if available
-            if ($fallback) {
-                Write-Info "Trying fallback package '$fallback'..."
-                try {
-                    $result = choco install $fallback -y --limit-output
-                    if ($LASTEXITCODE -eq 0) {
-                        Write-Success "$fallback installed successfully"
-                        $installed = $true
-                        $successCount++
-                    } else {
-                        throw "Chocolatey exit code: $LASTEXITCODE"
+            # Tool not found, proceed with installation
+        }
+
+        if (!$alreadyInstalled) {
+            Write-Info "Installing $description..."
+            $installed = $false
+
+            # Try main package first
+            try {
+                $result = choco install $toolName -y --limit-output
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Success "$description installed successfully"
+                    $installed = $true
+                    $successCount++
+                } else {
+                    throw "Chocolatey exit code: $LASTEXITCODE"
+                }
+            }
+            catch {
+                Write-Warning "Failed to install $toolName"
+                $failCount++
+
+                # Try fallback if available
+                if ($fallback) {
+                    Write-Info "Trying fallback package '$fallback'..."
+                    try {
+                        $result = choco install $fallback -y --limit-output
+                        if ($LASTEXITCODE -eq 0) {
+                            Write-Success "$fallback installed successfully"
+                            $installed = $true
+                            $successCount++
+                        } else {
+                            throw "Chocolatey exit code: $LASTEXITCODE"
+                        }
+                    }
+                    catch {
+                        Write-Warning "Failed to install both $toolName and $fallback"
                     }
                 }
-                catch {
-                    Write-Warning "Failed to install both $toolName and $fallback"
-                    $failCount++
-                }
-            } else {
-                $failCount++
             }
         }
-        
-        if (!$installed) {
+
+        if (!$installed -and !$alreadyInstalled) {
             Write-Info "You can install $toolName manually later using: choco install $toolName"
         }
     }

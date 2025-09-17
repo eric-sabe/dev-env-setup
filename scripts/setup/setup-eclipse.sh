@@ -15,6 +15,10 @@ if [[ -f "$UTIL_DIR/version-resolver.sh" ]]; then
     # shellcheck source=../utils/version-resolver.sh
     source "$UTIL_DIR/version-resolver.sh"
 fi
+if [[ -f "$UTIL_DIR/idempotency.sh" ]]; then
+    # shellcheck source=../utils/idempotency.sh
+    source "$UTIL_DIR/idempotency.sh"
+fi
 
 ECLIPSE_VERSION_Y="2023-12" # TODO: move to manifest sources block in Phase 3
 ECLIPSE_RELEASE="R"         # channel release marker
