@@ -7,6 +7,9 @@ param(
     [switch]$SkipWindowsTools
 )
 
+# Import required modules
+Import-Module DISM -ErrorAction SilentlyContinue
+
 # Check if running as administrator
 function Test-Administrator {
     $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -59,16 +62,43 @@ function Enable-WSL2 {
 
     Write-Info "Enabling WSL2 feature..."
 
-    # Enable WSL feature
-    dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+    # Check if WSL is already enabled
+    $wslFeature = Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux
+    $vmFeature = Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform
 
-    # Enable Virtual Machine Platform
-    dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+    $needsRestart = $false
 
-    # Set WSL2 as default version
-    wsl --set-default-version 2
+    if ($wslFeature.State -ne "Enabled") {
+        Write-Info "Enabling Windows Subsystem for Linux..."
+        dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+        $needsRestart = $true
+    }
 
-    Write-Success "WSL2 enabled"
+    if ($vmFeature.State -ne "Enabled") {
+        Write-Info "Enabling Virtual Machine Platform..."
+        dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+        $needsRestart = $true
+    }
+
+    if ($needsRestart) {
+        Write-Warning "A restart is required to complete WSL installation."
+        Write-Info "After restart, run this script again to complete the setup."
+        $restart = Read-Host "Would you like to restart now? (y/N)"
+        if ($restart -eq "y" -or $restart -eq "Y") {
+            Restart-Computer -Force
+        }
+        return
+    }
+
+    # Set WSL2 as default version (only if WSL is already working)
+    try {
+        wsl --set-default-version 2
+        Write-Success "WSL2 set as default version"
+    } catch {
+        Write-Info "WSL not ready yet. Will set default version after restart."
+    }
+
+    Write-Success "WSL2 features enabled"
 }
 
 # Install Ubuntu WSL2
@@ -80,23 +110,52 @@ function Install-UbuntuWSL {
 
     Write-Info "Installing Ubuntu WSL2..."
 
+    # Check if WSL is working
+    try {
+        $wslStatus = wsl --status 2>$null
+    } catch {
+        Write-Warning "WSL is not ready. Please restart your computer and run this script again."
+        return
+    }
+
     # Install Ubuntu from Microsoft Store
     try {
         # Check if Ubuntu is already installed
-        $ubuntuInstalled = wsl -l -q | Where-Object { $_ -match "Ubuntu" }
+        $ubuntuInstalled = wsl -l -q 2>$null | Where-Object { $_ -match "Ubuntu" }
         if ($ubuntuInstalled) {
             Write-Success "Ubuntu WSL already installed"
             return
         }
 
-        # Install Ubuntu 22.04 LTS
-        wsl --install -d Ubuntu-22.04
+        # Try different Ubuntu installation methods
+        Write-Info "Attempting to install Ubuntu..."
+        
+        # Method 1: Use wsl --install
+        try {
+            wsl --install -d Ubuntu-22.04
+            Write-Success "Ubuntu WSL2 installed via wsl --install"
+        } catch {
+            # Method 2: Manual download and install
+            Write-Info "Trying alternative Ubuntu installation method..."
+            $ubuntuUrl = "https://aka.ms/wslubuntu2204"
+            $ubuntuPath = "$env:TEMP\Ubuntu2204.appx"
+            
+            Write-Info "Downloading Ubuntu 22.04..."
+            Invoke-WebRequest -Uri $ubuntuUrl -OutFile $ubuntuPath
+            
+            Write-Info "Installing Ubuntu 22.04..."
+            Add-AppxPackage -Path $ubuntuPath
+            
+            Remove-Item $ubuntuPath -ErrorAction SilentlyContinue
+            Write-Success "Ubuntu WSL2 installed via manual download"
+        }
 
-        Write-Success "Ubuntu WSL2 installed"
         Write-Info "Please complete the Ubuntu setup (username/password) when prompted"
+        Write-Info "You can start Ubuntu by running: wsl"
     }
     catch {
         Write-Warning "Ubuntu installation failed. You can install it manually from Microsoft Store"
+        Write-Info "Search for 'Ubuntu 22.04 LTS' in Microsoft Store"
     }
 }
 
