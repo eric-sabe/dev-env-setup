@@ -214,7 +214,7 @@ nestedVirtualization=true
                         'nestedVirtualization=true')
                 } else {
                     # Add the key into the existing [wsl2] section
-                    $content = $content -replace '(\[wsl2\][^\[]*)', '$1' + "`r`n" + 'nestedVirtualization=true'
+                    $content = $content -replace '(\[wsl2\][^\[]*)', ('$1' + "`r`n" + 'nestedVirtualization=true')
                 }
             }
 
