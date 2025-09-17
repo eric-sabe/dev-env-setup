@@ -174,6 +174,58 @@ function Enable-WSL2 {
         $needsRestart = $true
     }
 
+    # Configure nested virtualization settings automatically (before restart)
+    Write-Info "Configuring nested virtualization settings..."
+
+    # Set the environment variable for nested virtualization
+    try {
+        [Environment]::SetEnvironmentVariable("WSL_ENABLE_NESTED_VIRTUALIZATION", "1", "Machine")
+        Write-Success "Set WSL_ENABLE_NESTED_VIRTUALIZATION=1"
+    } catch {
+        Write-Warning "Could not set environment variable automatically. You may need to set it manually."
+    }
+
+    # Configure .wslconfig for nested virtualization
+    try {
+        $wslConfigPath = Join-Path $env:UserProfile '.wslconfig'
+        $content = if (Test-Path $wslConfigPath) { Get-Content $wslConfigPath -Raw } else { "" }
+
+        if ($content -notmatch '(?m)^\[wsl2\]') {
+            # No [wsl2] section yet - create one with the setting ON
+            $content = @"
+[wsl2]
+nestedVirtualization=true
+"@
+        } else {
+            if ($content -match 'nestedVirtualization\s*=\s*(true|false)') {
+                # Set to true
+                $content = [regex]::Replace($content,
+                    'nestedVirtualization\s*=\s*(true|false)',
+                    'nestedVirtualization=true')
+            } else {
+                # Add the key into the existing [wsl2] section
+                $content = $content -replace '(\[wsl2\][^\[]*)', ('$1' + "`r`n" + 'nestedVirtualization=true')
+            }
+        }
+
+        Set-Content -Path $wslConfigPath -Value $content -Encoding UTF8
+        Write-Success "Configured .wslconfig with nestedVirtualization=true"
+    } catch {
+        Write-Warning "Could not configure .wslconfig automatically: $($_.Exception.Message)"
+    }
+
+    # Try to enable Developer Mode (this may not work in all environments)
+    try {
+        $registryPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock"
+        if (-not (Test-Path $registryPath)) {
+            New-Item -Path $registryPath -Force | Out-Null
+        }
+        Set-ItemProperty -Path $registryPath -Name "AllowDevelopmentWithoutDevLicense" -Value 1 -Type DWord
+        Write-Success "Enabled Developer Mode"
+    } catch {
+        Write-Info "Developer Mode may need to be enabled manually in Windows Settings"
+    }
+
     if ($needsRestart) {
         Write-Warning "A restart is required to complete WSL installation."
         Write-Info "After restart, run this script again to complete the setup."
@@ -183,58 +235,6 @@ function Enable-WSL2 {
         }
         return
     }
-
-    # Configure nested virtualization settings automatically
-    Write-Info "Configuring nested virtualization settings..."
-
-    # Set the environment variable for nested virtualization
-        try {
-            [Environment]::SetEnvironmentVariable("WSL_ENABLE_NESTED_VIRTUALIZATION", "1", "Machine")
-            Write-Success "Set WSL_ENABLE_NESTED_VIRTUALIZATION=1"
-        } catch {
-            Write-Warning "Could not set environment variable automatically. You may need to set it manually."
-        }
-
-        # Configure .wslconfig for nested virtualization
-        try {
-            $wslConfigPath = Join-Path $env:UserProfile '.wslconfig'
-            $content = if (Test-Path $wslConfigPath) { Get-Content $wslConfigPath -Raw } else { "" }
-
-            if ($content -notmatch '(?m)^\[wsl2\]') {
-                # No [wsl2] section yet - create one with the setting ON
-                $content = @"
-[wsl2]
-nestedVirtualization=true
-"@
-            } else {
-                if ($content -match 'nestedVirtualization\s*=\s*(true|false)') {
-                    # Set to true
-                    $content = [regex]::Replace($content,
-                        'nestedVirtualization\s*=\s*(true|false)',
-                        'nestedVirtualization=true')
-                } else {
-                    # Add the key into the existing [wsl2] section
-                    $content = $content -replace '(\[wsl2\][^\[]*)', ('$1' + "`r`n" + 'nestedVirtualization=true')
-                }
-            }
-
-            Set-Content -Path $wslConfigPath -Value $content -Encoding UTF8
-            Write-Success "Configured .wslconfig with nestedVirtualization=true"
-        } catch {
-            Write-Warning "Could not configure .wslconfig automatically: $($_.Exception.Message)"
-        }
-
-        # Try to enable Developer Mode (this may not work in all environments)
-        try {
-            $registryPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock"
-            if (-not (Test-Path $registryPath)) {
-                New-Item -Path $registryPath -Force | Out-Null
-            }
-            Set-ItemProperty -Path $registryPath -Name "AllowDevelopmentWithoutDevLicense" -Value 1 -Type DWord
-            Write-Success "Enabled Developer Mode"
-        } catch {
-            Write-Info "Developer Mode may need to be enabled manually in Windows Settings"
-        }
 
     # Set WSL2 as default version (only if WSL is already working)
     try {
