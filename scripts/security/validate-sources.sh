@@ -25,12 +25,11 @@ done
 missing=0
 report=()
 
-# Validate archives block: require sha256 != TBD and content_length present
-while IFS= read -r line; do
-  archives_block+="$line\n"
-done < "$YAML"
-
-archives_lines=$(printf "%b" "$archives_block" | awk '/^archives:/,0')
+# Extract precise blocks to avoid bleeding into other top-level sections
+archives_lines=$(awk 'BEGIN{inblk=0} 
+  /^archives:/ {inblk=1; next}
+  /^[[:alpha:]_]+:/ { if(inblk){exit} }
+  { if(inblk) print }' "$YAML")
 current_name=""; have_sha=""; have_len=""
 while IFS= read -r l; do
   if [[ $l =~ ^[[:space:]]*-[[:space:]]name: ]]; then
@@ -50,7 +49,7 @@ while IFS= read -r l; do
   elif [[ -n $current_name && $l =~ content_length: ]]; then
     have_len=$(echo "$l" | awk '{print $2}')
   fi
-done < <(printf "%b" "$archives_lines")
+done < <(printf "%s\n" "$archives_lines")
 # tail entry
 if [[ -n $current_name ]]; then
   if [[ -z $have_sha || $have_sha == "TBD" || -z $have_len ]]; then
@@ -62,7 +61,10 @@ if [[ -n $current_name ]]; then
 fi
 
 # Validate sources block: enforce only for non-package-manager types
-sources_lines=$(printf "%b" "$archives_block" | awk '/^sources:/,0')
+sources_lines=$(awk 'BEGIN{inblk=0}
+  /^sources:/ {inblk=1; next}
+  /^[[:alpha:]_]+:/ { if(inblk){exit} }
+  { if(inblk) print }' "$YAML")
 src_name=""; src_type=""; src_sha=""; src_url=""
 while IFS= read -r l; do
   if [[ $l =~ ^[[:space:]]*-[[:space:]]name: ]]; then
@@ -88,7 +90,7 @@ while IFS= read -r l; do
   elif [[ -n $src_name && $l =~ url: ]]; then
     src_url=$(echo "$l" | sed -E 's/.*url: *([^ #]+)/\1/')
   fi
-done < <(printf "%b" "$sources_lines")
+done < <(printf "%s\n" "$sources_lines")
 # tail entry
 if [[ -n $src_name ]]; then
   if [[ $src_type == "pypi" || $src_type == "npm" ]]; then
@@ -121,6 +123,10 @@ fi
 
 if [[ $STRICT -eq 1 && $missing -gt 0 ]]; then
   echo "Missing $missing checksum(s) (archives or non-package-manager sources)" >&2
+  for r in "${report[@]}"; do
+    entry="${r%%|*}"; state="${r#*|}";
+    [[ $state == missing ]] && echo "  - $entry" >&2
+  done
   exit 4
 fi
 
