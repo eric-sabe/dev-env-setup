@@ -201,7 +201,7 @@ function Enable-WSL2 {
             $content = if (Test-Path $wslConfigPath) { Get-Content $wslConfigPath -Raw } else { "" }
 
             if ($content -notmatch '(?m)^\[wsl2\]') {
-                # No [wsl2] section yet — create one with the setting ON
+                # No [wsl2] section yet - create one with the setting ON
                 $content = @"
 [wsl2]
 nestedVirtualization=true
@@ -428,11 +428,11 @@ function Install-WindowsTools {
     
     if ($script:IsParallelsARM64) {
         Write-Host ""
-        Write-Host "💡 Parallels ARM64 Environment Notes:" -ForegroundColor Cyan
-        Write-Host "• All installed tools work perfectly in this environment" -ForegroundColor Green
-        Write-Host "• VS Code, Git, Python, Node.js, and Java all have excellent performance" -ForegroundColor Green
-        Write-Host "• Use Docker Desktop for container development" -ForegroundColor Green
-        Write-Host "• Consider Remote SSH extension for Linux development" -ForegroundColor Yellow
+        Write-Host "Parallels ARM64 Environment Notes:" -ForegroundColor Cyan
+        Write-Host "- All installed tools work perfectly in this environment" -ForegroundColor Green
+        Write-Host "- VS Code, Git, Python, Node.js, and Java all have excellent performance" -ForegroundColor Green
+        Write-Host "- Use Docker Desktop for container development" -ForegroundColor Green
+        Write-Host "- Consider Remote SSH extension for Linux development" -ForegroundColor Yellow
     }
     
     if ($failCount -gt 0) {
@@ -590,11 +590,11 @@ function Uninstall-DevEnvironment {
     Write-Warning "This will remove all development tools and configurations installed by this script."
     Write-Host ""
     Write-Host "The following will be removed:" -ForegroundColor Yellow
-    Write-Host "• Chocolatey package manager" -ForegroundColor Yellow
-    Write-Host "• All development tools (Git, VS Code, Python, Node.js, Java, etc.)" -ForegroundColor Yellow
-    Write-Host "• WSL2/Ubuntu subsystem" -ForegroundColor Yellow
-    Write-Host "• Development directories and configurations (optional)" -ForegroundColor Yellow
-    Write-Host "• Environment variable modifications" -ForegroundColor Yellow
+    Write-Host "- Chocolatey package manager" -ForegroundColor Yellow
+    Write-Host "- All development tools (Git, VS Code, Python, Node.js, Java, etc.)" -ForegroundColor Yellow
+    Write-Host "- WSL2/Ubuntu subsystem" -ForegroundColor Yellow
+    Write-Host "- Development directories and configurations (optional)" -ForegroundColor Yellow
+    Write-Host "- Environment variable modifications" -ForegroundColor Yellow
     Write-Host ""
     $confirm = Read-Host "Are you sure you want to continue? Type 'YES' to confirm"
     if ($confirm -ne "YES") {
@@ -742,11 +742,11 @@ function Uninstall-DevEnvironment {
 
     # Final summary
     Write-Host ""
-    Write-Host "🗑️  Uninstallation Complete!" -ForegroundColor Green
+    Write-Host "Uninstallation Complete!" -ForegroundColor Green
     Write-Host ""
     Write-Host "Summary:" -ForegroundColor Cyan
     Write-Host "Packages removed: $removedCount" -ForegroundColor Green
-    Write-Host "⚠️  Failed removals: $failedCount" -ForegroundColor Yellow
+    Write-Host "Failed removals: $failedCount" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "Note: Some files may remain if they were in use during uninstallation." -ForegroundColor Yellow
     Write-Host "You may need to restart your computer for all changes to take effect." -ForegroundColor Yellow
