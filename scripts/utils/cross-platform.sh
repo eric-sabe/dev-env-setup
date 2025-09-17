@@ -2,12 +2,14 @@
 # cross-platform.sh - Shared utilities (logging, platform detection, safety helpers)
 # Sourced by other scripts. Keep POSIX-ish where reasonable.
 
-# Only set strict mode when executed directly, not when sourced. Opt-in via STRICT_MODE or in CI.
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-  if [[ ${STRICT_MODE:-0} == 1 || -n ${CI:-} ]]; then
-    set -Eeuo pipefail
-  else
-    set -o pipefail
+# Only set strict mode when executed directly under Bash (not when sourced, and never from zsh).
+if [[ -n "${BASH_VERSION:-}" ]]; then
+  if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    if [[ ${STRICT_MODE:-0} == 1 || -n ${CI:-} ]]; then
+      set -Eeuo pipefail
+    else
+      set -o pipefail
+    fi
   fi
 fi
 
@@ -23,8 +25,18 @@ log_warn()    { echo -e "${YELLOW}[WARN]${RESET} $*"; }
 log_error()   { echo -e "${RED}[ERROR]${RESET} $*" >&2; }
 log_success() { echo -e "${GREEN}[OK]${RESET} $*"; }
 
-# Trap helper
-trap 'log_error "Aborted at ${BASH_SOURCE[0]}:${LINENO}"' ERR
+# Trap helper (portable across bash/zsh). Avoid BASH_SOURCE when not in bash.
+__cp_script_name() {
+  if [[ -n "${BASH_VERSION:-}" ]]; then
+    echo "${BASH_SOURCE[0]}"
+  elif [[ -n "${ZSH_VERSION:-}" ]]; then
+    # zsh-specific parameter expansion for current file
+    echo "${(%):-%N}"
+  else
+    echo "$0"
+  fi
+}
+trap 'log_error "Aborted at $(__cp_script_name):${LINENO}"' ERR
 
 command_exists() { command -v "$1" &>/dev/null; }
 

@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # verify.sh - Shared lightweight post-install verification helpers
 # Usage: source this file, then call verify_command, verify_service, etc.
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-  if [[ ${STRICT_MODE:-0} == 1 || -n ${CI:-} ]]; then
-    set -Eeuo pipefail
-  else
-    set -o pipefail
+# Only enable strict mode when executed directly under Bash, not when sourced (e.g., from zsh).
+if [[ -n "${BASH_VERSION:-}" ]]; then
+  if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    if [[ ${STRICT_MODE:-0} == 1 || -n ${CI:-} ]]; then
+      set -Eeuo pipefail
+    else
+      set -o pipefail
+    fi
   fi
 fi
 

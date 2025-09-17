@@ -25,14 +25,12 @@ if [[ -f "$MANIFEST" ]]; then
   done < <(awk '/^python:/,/^node:/' "$MANIFEST")
   # node globals
   while IFS= read -r line; do
-    if [[ $line =~ :[[:space:]]*"[0-9] ]]; then
-      pkg=$(echo "$line" | sed -E 's/^[[:space:]]*([@A-Za-z0-9_\/-]+):.*/\1/')
-      ver=$(echo "$line" | sed -nE 's/.*"([0-9][^"]*)".*/\1/p')
-      if [[ -n $ver ]]; then
-        escaped_pkg=${pkg//@/%40}
-        purl="pkg:npm/${escaped_pkg}@${ver}"
-        components+=("{\"type\": \"library\", \"name\": \"$pkg\", \"version\": \"$ver\", \"purl\": \"$purl\"}")
-      fi
+    pkg=$(echo "$line" | sed -E 's/^[[:space:]]*([@A-Za-z0-9_\/-]+):.*/\1/')
+    ver=$(echo "$line" | sed -nE 's/.*"([0-9][^"]*)".*/\1/p')
+    if [[ -n $ver ]]; then
+      escaped_pkg=${pkg//@/%40}
+      purl="pkg:npm/${escaped_pkg}@${ver}"
+      components+=("{\"type\": \"library\", \"name\": \"$pkg\", \"version\": \"$ver\", \"purl\": \"$purl\"}")
     fi
   done < <(awk '/^node:/,/^linux:/' "$MANIFEST")
 fi

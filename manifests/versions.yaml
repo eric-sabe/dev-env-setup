@@ -105,22 +105,35 @@ archives:
     content_length: 541346839
     sha256: ea4098a41833d5ca96323bf8bb7ddc8e039765f85c86ae4038901637a97b3b93
 
+  # NVIDIA CUDA repo keyring for Ubuntu 22.04 (used by setup-ml.sh)
+  - name: nvidia-cuda-keyring-ubuntu2204
+    version: "1.1-1"
+    type: deb
+    url: https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+    content_length: 4332
+    sha256: d93190d50b98ad4699ff40f4f7af50f16a76dac3bb8da1eaaf366d47898ff8df
+
 gpg_keys:
-  trusted: []
-      - ninja-build
-      - git
-    db:
-      - postgresql
-      - mysql-server
-      - redis-server
-      - mongodb-org
-    web:
-      - nginx
-      - apache2
-    systems:
-      - gdb
-      - valgrind
-      - qemu-system
+  - name: microsoft-vscode
+    source: https://packages.microsoft.com/keys/microsoft.asc
+    fingerprint: BC528686B50D79E339D3721CEB3E94ADBE1229CF
+    status: active
+  - name: docker
+    source: https://download.docker.com/linux/ubuntu/gpg
+    fingerprint: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+    status: active
+  - name: google-chrome
+    source: https://dl.google.com/linux/linux_signing_key.pub
+  fingerprint: EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796
+    status: active
+  - name: mongodb-7.0
+    source: https://www.mongodb.org/static/pgp/server-7.0.asc
+    fingerprint: E58830201F7DD82CD808AA84160D26BB1785BA38
+    status: active
+  - name: dbeaver
+    source: https://dbeaver.io/debs/dbeaver.gpg.key
+    fingerprint: 98F5A7CC1ABE72AC3852A007D33A1BD725ED047D
+    status: active
 
 macos:
   brew:
