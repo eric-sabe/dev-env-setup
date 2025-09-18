@@ -1495,6 +1495,100 @@ function Uninstall-DevEnvironment {
         Write-Warning "Could not list installed packages: $_"
     }
 
+    # Function to find and execute Windows native uninstaller
+    function Invoke-WindowsUninstaller {
+        param(
+            [string]$AppName,
+            [string[]]$SearchTerms
+        )
+        
+        Write-TimedInfo "Searching for $AppName in Windows installed programs..."
+        
+        # Search both 32-bit and 64-bit registry locations
+        $registryPaths = @(
+            "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+            "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
+            "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*"
+        )
+        
+        foreach ($path in $registryPaths) {
+            try {
+                $uninstallKeys = Get-ItemProperty $path -ErrorAction SilentlyContinue | Where-Object {
+                    $_.DisplayName -and ($SearchTerms | ForEach-Object { $_.DisplayName -like "*$_*" }) -contains $true
+                }
+                
+                foreach ($key in $uninstallKeys) {
+                    if ($key.UninstallString) {
+                        Write-TimedInfo "Found $AppName installer: $($key.DisplayName)"
+                        Write-TimedInfo "Uninstall string: $($key.UninstallString)"
+                        
+                        # Parse the uninstall string
+                        $uninstallString = $key.UninstallString
+                        $quietString = $key.QuietUninstallString
+                        
+                        # Try quiet uninstall first if available
+                        if ($quietString) {
+                            Write-TimedInfo "Executing quiet uninstaller: $quietString"
+                            try {
+                                $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$quietString`"" -Wait -PassThru -WindowStyle Hidden
+                                if ($process.ExitCode -eq 0) {
+                                    Write-Success "Successfully uninstalled $AppName using quiet uninstaller"
+                                    return $true
+                                } else {
+                                    Write-Warning "Quiet uninstaller returned exit code: $($process.ExitCode)"
+                                }
+                            } catch {
+                                Write-Warning "Failed to execute quiet uninstaller: $($_.Exception.Message)"
+                            }
+                        }
+                        
+                        # Try regular uninstaller with silent flags
+                        if ($uninstallString) {
+                            # Common silent flags for different installer types
+                            $silentFlags = @()
+                            if ($uninstallString -like "*msiexec*") {
+                                $silentFlags = @("/quiet", "/norestart")
+                            } elseif ($uninstallString -like "*uninst*.exe*" -or $uninstallString -like "*uninstall*.exe*") {
+                                $silentFlags = @("/S", "/SILENT")  # Common for NSIS installers
+                            } elseif ($uninstallString -like "*.exe*") {
+                                $silentFlags = @("--uninstall", "--silent")  # Common for other installers
+                            }
+                            
+                            # Parse executable and arguments
+                            if ($uninstallString -match '^"([^"]*)"(.*)') {
+                                $executable = $matches[1]
+                                $arguments = $matches[2].Trim() + " " + ($silentFlags -join " ")
+                            } else {
+                                $parts = $uninstallString -split ' ', 2
+                                $executable = $parts[0]
+                                $arguments = if ($parts.Length -gt 1) { $parts[1] + " " + ($silentFlags -join " ") } else { $silentFlags -join " " }
+                            }
+                            
+                            Write-TimedInfo "Executing uninstaller: $executable $arguments"
+                            try {
+                                $process = Start-Process -FilePath $executable -ArgumentList $arguments -Wait -PassThru -WindowStyle Hidden
+                                if ($process.ExitCode -eq 0 -or $process.ExitCode -eq 3010) {  # 3010 = restart required
+                                    Write-Success "Successfully uninstalled $AppName using Windows uninstaller"
+                                    return $true
+                                } else {
+                                    Write-Warning "Windows uninstaller returned exit code: $($process.ExitCode)"
+                                }
+                            } catch {
+                                Write-Warning "Failed to execute Windows uninstaller: $($_.Exception.Message)"
+                            }
+                        }
+                    }
+                }
+            } catch {
+                # Continue to next registry path
+                continue
+            }
+        }
+        
+        Write-TimedInfo "No Windows uninstaller found for $AppName"
+        return $false
+    }
+
     $removedCount = 0
     $failedCount = 0
 
@@ -1503,107 +1597,81 @@ function Uninstall-DevEnvironment {
         $alternatives = $tool.alternatives
         $removed = $false
         
-        # Try main package name first
-        try {
-            Write-Info "Attempting to remove $toolName..."
-            Write-TimedInfo "Running: choco uninstall $toolName -y --limit-output --force --remove-dependencies"
-            $result = choco uninstall $toolName -y --limit-output --force --remove-dependencies 2>$null
-            Write-TimedInfo "Chocolatey exit code: $LASTEXITCODE"
-            if ($LASTEXITCODE -eq 0) {
-                Write-Success "Removed $toolName"
-                $removedCount++
-                $removed = $true
-            } else {
-                Write-Warning "$toolName uninstall returned exit code $LASTEXITCODE"
-            }
-        }
-        catch {
-            Write-Warning "Exception during $toolName uninstall: $($_.Exception.Message)"
-            # Continue to try alternatives
-        }
-        
-        # Try alternatives if main package failed
-        if (-not $removed -and $alternatives.Count -gt 0) {
-            foreach ($alt in $alternatives) {
-                try {
-                    Write-Info "Trying alternative package name: $alt"
-                    Write-TimedInfo "Running: choco uninstall $alt -y --limit-output --force --remove-dependencies"
-                    $result = choco uninstall $alt -y --limit-output --force --remove-dependencies 2>$null
-                    Write-TimedInfo "Chocolatey exit code: $LASTEXITCODE"
-                    if ($LASTEXITCODE -eq 0) {
-                        Write-Success "Removed $alt"
-                        $removedCount++
-                        $removed = $true
-                        break
-                    }
-                }
-                catch {
-                    Write-Warning "Exception during $alt uninstall: $($_.Exception.Message)"
-                    # Continue to next alternative
-                }
-            }
+        # Define search terms for Windows registry lookup
+        $searchTerms = @()
+        switch ($toolName) {
+            "visualstudiocode" { $searchTerms = @("Visual Studio Code", "Microsoft Visual Studio Code") }
+            "eclipse" { $searchTerms = @("Eclipse", "Eclipse IDE") }
+            "python" { $searchTerms = @("Python 3.", "Python") }
+            "nodejs" { $searchTerms = @("Node.js") }
+            "openjdk" { $searchTerms = @("Eclipse Temurin", "OpenJDK", "Temurin") }
+            "maven" { $searchTerms = @("Apache Maven") }
+            "gradle" { $searchTerms = @("Gradle") }
+            "cmake" { $searchTerms = @("CMake") }
+            "docker-desktop" { $searchTerms = @("Docker Desktop") }
+            "postman" { $searchTerms = @("Postman") }
+            "gitkraken" { $searchTerms = @("GitKraken") }
+            "microsoft-windows-terminal" { $searchTerms = @("Windows Terminal") }
+            "powershell-core" { $searchTerms = @("PowerShell 7", "PowerShell Core") }
+            default { $searchTerms = @($toolName) }
         }
         
+        # Step 1: Try Windows native uninstaller first
+        Write-Info "Attempting to remove $toolName using Windows uninstaller..."
+        $removed = Invoke-WindowsUninstaller -AppName $toolName -SearchTerms $searchTerms
+        
+        # Step 2: Fall back to Chocolatey if Windows uninstaller failed
         if (-not $removed) {
-            # Special manual cleanup for GitKraken when Chocolatey fails
-            if ($toolName -eq "gitkraken") {
-                Write-Info "GitKraken not found in Chocolatey database, attempting manual cleanup..."
-                $manuallyRemoved = $false
-                
-                # Kill any running GitKraken processes
-                try {
-                    Get-Process | Where-Object { $_.ProcessName -like "*gitkraken*" -or $_.ProcessName -like "*GitKraken*" } | Stop-Process -Force -ErrorAction SilentlyContinue
-                    Write-TimedInfo "Stopped GitKraken processes"
-                } catch {
-                    Write-TimedInfo "No GitKraken processes to stop"
-                }
-                
-                # Remove GitKraken directories manually
-                $gitKrakenPaths = @(
-                    "$env:LOCALAPPDATA\gitkraken",
-                    "$env:APPDATA\gitkraken",
-                    "$env:ProgramFiles\GitKraken",
-                    "$env:ProgramFiles(x86)\GitKraken"
-                )
-                
-                foreach ($path in $gitKrakenPaths) {
-                    if (Test-Path $path) {
-                        try {
-                            Write-TimedInfo "Removing GitKraken directory: $path"
-                            Remove-Item -Path $path -Recurse -Force -ErrorAction Stop
-                            Write-Success "Manually removed GitKraken from: $path"
-                            $manuallyRemoved = $true
-                        } catch {
-                            Write-Warning "Failed to remove GitKraken directory $path : $($_.Exception.Message)"
-                        }
-                    }
-                }
-                
-                # Remove GitKraken from Start Menu
-                $startMenuPaths = @(
-                    "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\GitKraken.lnk",
-                    "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\GitKraken.lnk"
-                )
-                foreach ($shortcut in $startMenuPaths) {
-                    if (Test-Path $shortcut) {
-                        try {
-                            Remove-Item -Path $shortcut -Force
-                            Write-TimedInfo "Removed GitKraken shortcut: $shortcut"
-                        } catch {
-                            Write-Warning "Failed to remove shortcut: $shortcut"
-                        }
-                    }
-                }
-                
-                if ($manuallyRemoved) {
-                    Write-Success "GitKraken manually removed"
+            Write-Info "Falling back to Chocolatey for $toolName..."
+            try {
+                Write-TimedInfo "Running: choco uninstall $toolName -y --limit-output --force --remove-dependencies"
+                $result = choco uninstall $toolName -y --limit-output --force --remove-dependencies 2>$null
+                Write-TimedInfo "Chocolatey exit code: $LASTEXITCODE"
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Success "Removed $toolName via Chocolatey"
                     $removedCount++
+                    $removed = $true
                 } else {
-                    Write-Info "$toolName not installed or already removed"
+                    Write-Warning "$toolName Chocolatey uninstall returned exit code $LASTEXITCODE"
                 }
-            } else {
-                Write-Info "$toolName not installed or already removed"
             }
+            catch {
+                Write-Warning "Exception during $toolName Chocolatey uninstall: $($_.Exception.Message)"
+            }
+            
+            # Try alternatives if main package failed
+            if (-not $removed -and $alternatives.Count -gt 0) {
+                foreach ($alt in $alternatives) {
+                    try {
+                        Write-Info "Trying alternative Chocolatey package: $alt"
+                        Write-TimedInfo "Running: choco uninstall $alt -y --limit-output --force --remove-dependencies"
+                        $result = choco uninstall $alt -y --limit-output --force --remove-dependencies 2>$null
+                        Write-TimedInfo "Chocolatey exit code: $LASTEXITCODE"
+                        if ($LASTEXITCODE -eq 0) {
+                            Write-Success "Removed $alt via Chocolatey"
+                            $removedCount++
+                            $removed = $true
+                            break
+                        }
+                    }
+                    catch {
+                        Write-Warning "Exception during $alt Chocolatey uninstall: $($_.Exception.Message)"
+                    }
+                }
+            }
+        } else {
+            $removedCount++
+        }
+        
+        # Step 3: Manual cleanup only as absolute last resort (for debugging/cleanup)
+        if (-not $removed) {
+            if ($toolName -eq "gitkraken") {
+                Write-Warning "GitKraken could not be removed via Windows or Chocolatey uninstallers"
+                Write-Info "This may leave orphaned entries in Windows 'Installed Apps'"
+                Write-Info "Consider using 'Programs and Features' to manually remove if needed"
+            }
+            Write-Info "$toolName not found or already removed"
+            $failedCount++
         } else {
             Write-TimedInfo "$toolName removal completed successfully"
         }
