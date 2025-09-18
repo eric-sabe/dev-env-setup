@@ -105,6 +105,70 @@ function Write-TimedSuccess {
     Write-Host "[$timestamp] [OK] $Message" -ForegroundColor Green
 }
 
+# Run command with timeout to prevent hanging
+function Invoke-CommandWithTimeout {
+    param(
+        [string]$Command,
+        [int]$TimeoutMinutes = 10,
+        [string]$Description = "Command"
+    )
+    
+    try {
+        Write-Info "Running: $Description (timeout: ${TimeoutMinutes}m)"
+        
+        # Use Start-Process with timeout
+        $processInfo = New-Object System.Diagnostics.ProcessStartInfo
+        $processInfo.FileName = "powershell.exe"
+        $processInfo.Arguments = "-Command `"$Command`""
+        $processInfo.UseShellExecute = $false
+        $processInfo.RedirectStandardOutput = $true
+        $processInfo.RedirectStandardError = $true
+        $processInfo.CreateNoWindow = $true
+        
+        $process = New-Object System.Diagnostics.Process
+        $process.StartInfo = $processInfo
+        $process.Start() | Out-Null
+        
+        # Wait for completion with timeout
+        $timeoutMs = $TimeoutMinutes * 60 * 1000
+        if ($process.WaitForExit($timeoutMs)) {
+            $stdout = $process.StandardOutput.ReadToEnd()
+            $stderr = $process.StandardError.ReadToEnd()
+            $exitCode = $process.ExitCode
+            
+            return @{
+                Success = ($exitCode -eq 0)
+                ExitCode = $exitCode
+                Output = $stdout
+                Error = $stderr
+            }
+        } else {
+            $process.Kill()
+            Write-Warning "$Description timed out after $TimeoutMinutes minutes"
+            return @{
+                Success = $false
+                ExitCode = -1
+                Output = ""
+                Error = "Command timed out"
+            }
+        }
+    }
+    catch {
+        Write-Warning "Error running $Description`: $($_.Exception.Message)"
+        return @{
+            Success = $false
+            ExitCode = -1
+            Output = ""
+            Error = $_.Exception.Message
+        }
+    }
+    finally {
+        if ($process -and !$process.HasExited) {
+            $process.Kill()
+        }
+    }
+}
+
 # Check Windows version
 function Test-WindowsVersion {
     $osInfo = Get-ComputerInfo
@@ -389,11 +453,12 @@ nestedVirtualization=true
 
     if ($needsRestart) {
         Write-Warning "A restart is required to complete WSL installation."
+        Write-Warning "AUTOMATIC RESTART in 10 seconds - Save any open work!"
         Write-Info "After restart, run this script again to complete the setup."
-        $restart = Read-Host "Would you like to restart now? (y/N)"
-        if ($restart -eq "y" -or $restart -eq "Y") {
-            Restart-Computer -Force
-        }
+        Write-Host "Press Ctrl+C to cancel restart..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 10
+        Write-Host "Restarting computer now..." -ForegroundColor Red
+        Restart-Computer -Force
         return
     }
 
@@ -437,13 +502,13 @@ function Install-UbuntuWSL {
         $hypervisorRunning = Get-WmiObject -Class Win32_ComputerSystem | Select-Object -ExpandProperty HypervisorPresent
         if (-not $hypervisorRunning) {
             Write-Warning "Virtual Machine Platform is enabled but not fully active yet."
-            Write-Info "This usually means you need one more restart for virtualization to be ready."
-            Write-Info "Please restart your computer again and run this script to complete Ubuntu installation."
-            
-            $restart = Read-Host "Would you like to restart now? (y/N)"
-            if ($restart -eq "y" -or $restart -eq "Y") {
-                Restart-Computer -Force
-            }
+            Write-Warning "AUTOMATIC RESTART required for virtualization to be ready."
+            Write-Info "After restart, run this script again to complete Ubuntu installation."
+            Write-Warning "AUTOMATIC RESTART in 10 seconds - Save any open work!"
+            Write-Host "Press Ctrl+C to cancel restart..." -ForegroundColor Yellow
+            Start-Sleep -Seconds 10
+            Write-Host "Restarting computer now..." -ForegroundColor Red
+            Restart-Computer -Force
             return
         }
     } catch {
@@ -460,12 +525,14 @@ function Install-UbuntuWSL {
         }
 
         # Try different Ubuntu installation methods
-        Write-Info "Attempting to install Ubuntu..."
+        Write-Info "Attempting to install Ubuntu (this may take 5-10 minutes)..."
+        Write-Info "Progress will be shown below. Please wait without pressing any keys."
         
         # Method 1: Use modern wsl --install with Ubuntu (latest approach)
         try {
             # First try with just "Ubuntu" which gets the latest version
-            $wslOutput = wsl --install -d Ubuntu 2>&1
+            Write-Info "Installing Ubuntu distribution via WSL..."
+            $wslOutput = wsl --install -d Ubuntu --no-launch 2>&1
             if ($LASTEXITCODE -eq 0) {
                 Write-Success "Ubuntu WSL2 installed via wsl --install"
             } else {
@@ -476,22 +543,15 @@ function Install-UbuntuWSL {
                     Write-Host "WARNING: The Virtual Machine Platform is enabled but not fully activated yet." -ForegroundColor Yellow
                     Write-Host "This is common after the first restart following WSL2 feature installation." -ForegroundColor Yellow
                     Write-Host ""
-                    Write-Host "Solution: Restart your computer one more time to fully activate virtualization." -ForegroundColor Cyan
+                    Write-Host "Solution: Restart your computer to fully activate virtualization." -ForegroundColor Cyan
+                    Write-Host "After restart, run this script again to complete Ubuntu installation." -ForegroundColor Cyan
                     Write-Host ""
-                    
-                    $restart = Read-Host "Would you like to restart now? (y/N)"
-                    if ($restart -eq "y" -or $restart -eq "Y") {
-                        Write-Info "Restarting computer to activate Virtual Machine Platform..."
-                        Restart-Computer -Force
-                    } else {
-                        Write-Info "Please restart your computer manually and run this script again."
-                        Write-Info "After restart, Ubuntu should install successfully."
-                    }
+                    Write-Warning "Skipping Ubuntu installation - restart required"
                     return
                 } else {
                     # Try fallback to Ubuntu-22.04 if Ubuntu didn't work
-                    Write-Info "Trying with Ubuntu-22.04 distribution..."
-                    $wslOutput2 = wsl --install -d Ubuntu-22.04 2>&1
+                    Write-Info "Trying with Ubuntu-22.04 distribution (this may take 5-10 minutes)..."
+                    $wslOutput2 = wsl --install -d Ubuntu-22.04 --no-launch 2>&1
                     if ($LASTEXITCODE -eq 0) {
                         Write-Success "Ubuntu WSL2 installed via wsl --install (Ubuntu-22.04)"
                     } else {
@@ -506,12 +566,13 @@ function Install-UbuntuWSL {
             # Check for specific virtualization error in the exception message
             if ($errorMsg -match "0x80370102|WslRegisterDistribution failed") {
                 Write-Warning "Virtualization error detected - Virtual Machine Platform needs another restart to fully activate."
-                Write-Info "Please restart your computer one more time and run this script again."
-                
-                $restart = Read-Host "Would you like to restart now? (y/N)"
-                if ($restart -eq "y" -or $restart -eq "Y") {
-                    Restart-Computer -Force
-                }
+                Write-Warning "AUTOMATIC RESTART required for virtualization to be ready."
+                Write-Info "After restart, run this script again to complete the setup."
+                Write-Warning "AUTOMATIC RESTART in 10 seconds - Save any open work!"
+                Write-Host "Press Ctrl+C to cancel restart..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 10
+                Write-Host "Restarting computer now..." -ForegroundColor Red
+                Restart-Computer -Force
                 return
             }
             
@@ -537,18 +598,40 @@ function Install-UbuntuWSL {
                     Start-Process "ms-windows-store://pdp/?ProductId=9PN20MSR04DW"
                     
                     Write-Host ""
+                    Write-Host "Microsoft Store should now be opening with Ubuntu..." -ForegroundColor Yellow
                     Write-Host "Please follow these steps:" -ForegroundColor Yellow
                     Write-Host "1. Click 'Install' in the Microsoft Store" -ForegroundColor Yellow
                     Write-Host "2. Wait for the download and installation to complete" -ForegroundColor Yellow
                     Write-Host "3. Click 'Open' or launch Ubuntu from Start Menu" -ForegroundColor Yellow
                     Write-Host "4. Complete the Ubuntu setup (username/password)" -ForegroundColor Yellow
                     Write-Host ""
+                    Write-Host "Waiting for Ubuntu installation to complete..." -ForegroundColor Cyan
+                    Write-Host "This script will automatically continue checking every 30 seconds" -ForegroundColor Cyan
+                    Write-Host ""
                     
-                    $continueSetup = Read-Host "Press Enter after Ubuntu installation is complete, or type 'skip' to continue without Ubuntu"
-                    if ($continueSetup -eq "skip") {
-                        Write-Warning "Skipping Ubuntu installation - you can install it manually later"
-                        return
-                    }
+                    # Wait for Ubuntu to be installed
+                    $maxWaitMinutes = 10
+                    $waitCount = 0
+                    $maxWaitCount = $maxWaitMinutes * 2  # Check every 30 seconds
+                    
+                    do {
+                        Start-Sleep -Seconds 30
+                        $waitCount++
+                        Write-Host "Checking for Ubuntu installation... ($waitCount/$maxWaitCount)" -ForegroundColor Gray
+                        
+                        # Check if Ubuntu is available
+                        $ubuntuTest = wsl -l 2>&1 | Where-Object { $_ -match "Ubuntu" }
+                        if ($ubuntuTest) {
+                            Write-Success "Ubuntu installation detected!"
+                            break
+                        }
+                        
+                        if ($waitCount -ge $maxWaitCount) {
+                            Write-Warning "Timeout waiting for Ubuntu installation after $maxWaitMinutes minutes"
+                            Write-Host "You can install Ubuntu manually later or re-run the script" -ForegroundColor Yellow
+                            return
+                        }
+                    } while ($true)
                     
                     Write-Success "Ubuntu installation completed via Microsoft Store"
                 }
@@ -559,16 +642,12 @@ function Install-UbuntuWSL {
                 if ($LASTEXITCODE -ne 0 -and $testResult -match "0x80370102") {
                     Write-Warning "Ubuntu installed but cannot start due to virtualization error (0x80370102)"
                     Write-Host ""
-                    Write-Host "WARNING: Virtual Machine Platform needs one more restart to fully activate." -ForegroundColor Yellow
-                    Write-Host ""
-                    
-                    $restart = Read-Host "Restart now to activate virtualization? (y/N)"
-                    if ($restart -eq "y" -or $restart -eq "Y") {
-                        Write-Info "Restarting to activate Virtual Machine Platform..."
-                        Restart-Computer -Force
-                    } else {
-                        Write-Info "Please restart manually and run Ubuntu from Start Menu to complete setup."
-                    }
+                    Write-Warning "Virtual Machine Platform needs one more restart to fully activate." -ForegroundColor Red
+                    Write-Warning "AUTOMATIC RESTART in 10 seconds - Save any open work!"
+                    Write-Host "Press Ctrl+C to cancel restart..." -ForegroundColor Yellow
+                    Start-Sleep -Seconds 10
+                    Write-Info "Restarting to activate Virtual Machine Platform..."
+                    Restart-Computer -Force
                     return
                 }
             } catch {
@@ -696,7 +775,7 @@ function Install-WindowsTools {
     # Install development tools via Chocolatey
     $tools = @(
         @{name="git"; fallback=$null; description="Git version control"},
-        @{name="vscode"; fallback=$null; description="Visual Studio Code editor"},
+        @{name="visualstudiocode"; fallback=$null; description="Visual Studio Code editor"},
         @{name="eclipse"; fallback="eclipse-java"; description="Eclipse IDE"},
         @{name="python"; fallback=$null; description="Python programming language"},
         @{name="nodejs"; fallback=$null; description="Node.js runtime"},
@@ -738,7 +817,8 @@ function Install-WindowsTools {
 
             # Try main package first
             try {
-                $result = choco install $toolName -y --limit-output
+                Write-Info "Installing $description (this may take several minutes)..."
+                $result = choco install $toolName -y --limit-output --no-progress --acceptlicense --force --timeout 600
                 if ($LASTEXITCODE -eq 0) {
                     Write-Success "$description installed successfully"
                     $installed = $true
@@ -753,9 +833,9 @@ function Install-WindowsTools {
 
                 # Try fallback if available
                 if ($fallback) {
-                    Write-Info "Trying fallback package '$fallback'..."
+                    Write-Info "Trying fallback package '$fallback' (this may take several minutes)..."
                     try {
-                        $result = choco install $fallback -y --limit-output
+                        $result = choco install $fallback -y --limit-output --no-progress --acceptlicense --force --timeout 600
                         if ($LASTEXITCODE -eq 0) {
                             Write-Success "$fallback installed successfully"
                             $installed = $true
@@ -940,53 +1020,152 @@ function Uninstall-DevEnvironment {
     Write-Host "- Development directories and configurations (optional)" -ForegroundColor Yellow
     Write-Host "- Environment variable modifications" -ForegroundColor Yellow
     Write-Host ""
-    $confirm = Read-Host "Are you sure you want to continue? Type 'YES' to confirm"
-    if ($confirm -ne "YES") {
-        Write-Info "Uninstallation cancelled."
-        exit 0
-    }
-
+    
+    # Auto-confirm for non-interactive operation
+    Write-Warning "Proceeding with automated uninstallation..."
     Write-Host ""
     Write-Host "Starting uninstallation..." -ForegroundColor Red
 
     # Remove Chocolatey packages (skip critical system tools)
     Write-Info "Removing Chocolatey packages..."
+    
+    # Enhanced package list with alternatives for better detection
     $tools = @(
-        "vscode",
-        "eclipse",
-        "python",
-        "nodejs",
-        "openjdk",
-        "maven",
-        "gradle",
-        "docker-desktop",
-        "postman",
-        "gitkraken",
-        "microsoft-windows-terminal",
-        "powershell-core"
+        @{name="visualstudiocode"; alternatives=@("vscode")},
+        @{name="eclipse"; alternatives=@("eclipse-java")},
+        @{name="python"; alternatives=@("python3")},
+        @{name="nodejs"; alternatives=@("node", "nodejs.install")},
+        @{name="openjdk"; alternatives=@("temurin", "adoptopenjdk")},
+        @{name="maven"; alternatives=@()},
+        @{name="gradle"; alternatives=@()},
+        @{name="docker-desktop"; alternatives=@("docker")},
+        @{name="postman"; alternatives=@()},
+        @{name="gitkraken"; alternatives=@("git-kraken")},
+        @{name="microsoft-windows-terminal"; alternatives=@("microsoft-terminal", "windows-terminal")},
+        @{name="powershell-core"; alternatives=@("powershell")}
     )
 
     # Note: We skip 'git' as it might be used by other applications
     Write-Warning "Note: Keeping Git installed as it may be used by other applications"
     Write-Info "To remove Git manually: choco uninstall git -y"
 
+    # First, let's see what packages are actually installed
+    Write-Info "Checking currently installed Chocolatey packages..."
+    try {
+        $installedPackages = choco list --local-only --limit-output 2>$null
+        if ($installedPackages) {
+            Write-Host "Found these packages:" -ForegroundColor Cyan
+            $installedPackages | ForEach-Object { 
+                $packageInfo = $_ -split '\|'
+                if ($packageInfo.Count -ge 1) {
+                    Write-Host "  - $($packageInfo[0])" -ForegroundColor Gray
+                }
+            }
+            Write-Host ""
+        }
+    } catch {
+        Write-Warning "Could not list installed packages: $_"
+    }
+
     $removedCount = 0
     $failedCount = 0
 
     foreach ($tool in $tools) {
+        $toolName = $tool.name
+        $alternatives = $tool.alternatives
+        $removed = $false
+        
+        # Try main package name first
         try {
-            $result = choco uninstall $tool -y --limit-output 2>$null
+            Write-Info "Attempting to remove $toolName..."
+            $result = choco uninstall $toolName -y --limit-output --force --remove-dependencies 2>$null
             if ($LASTEXITCODE -eq 0) {
-                Write-Success "Removed $tool"
+                Write-Success "Removed $toolName"
                 $removedCount++
-            } else {
-                Write-Info "$tool not installed or already removed"
+                $removed = $true
             }
         }
         catch {
-            Write-Warning "Could not remove $tool"
-            $failedCount++
+            # Continue to try alternatives
         }
+        
+        # Try alternatives if main package failed
+        if (-not $removed -and $alternatives.Count -gt 0) {
+            foreach ($alt in $alternatives) {
+                try {
+                    Write-Info "Trying alternative package name: $alt"
+                    $result = choco uninstall $alt -y --limit-output --force --remove-dependencies 2>$null
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Success "Removed $alt"
+                        $removedCount++
+                        $removed = $true
+                        break
+                    }
+                }
+                catch {
+                    # Continue to next alternative
+                }
+            }
+        }
+        
+        if (-not $removed) {
+            Write-Info "$toolName not installed or already removed"
+        }
+    }
+
+    # Special comprehensive search for VSCode and Node.js (common problem packages)
+    Write-Info "Performing comprehensive search for VSCode and Node.js packages..."
+    try {
+        $installedPackages = choco list --local-only --limit-output 2>$null
+        if ($installedPackages) {
+            # Search for any package containing "code", "vscode", "visual", "node", "nodejs"
+            $vscodePatterns = @("code", "vscode", "visual")
+            $nodePatterns = @("node", "nodejs")
+            
+            foreach ($package in $installedPackages) {
+                $packageName = ($package -split '\|')[0].ToLower()
+                
+                # Check for VSCode variants
+                foreach ($pattern in $vscodePatterns) {
+                    if ($packageName.Contains($pattern)) {
+                        Write-Warning "Found potential VSCode package: $packageName"
+                        try {
+                            $result = choco uninstall $packageName -y --limit-output --force --remove-dependencies 2>$null
+                            if ($LASTEXITCODE -eq 0) {
+                                Write-Success "Removed VSCode package: $packageName"
+                                $removedCount++
+                            } else {
+                                Write-Warning "Could not remove $packageName"
+                            }
+                        } catch {
+                            Write-Warning "Error removing $packageName`: $_"
+                        }
+                        break
+                    }
+                }
+                
+                # Check for Node.js variants  
+                foreach ($pattern in $nodePatterns) {
+                    if ($packageName.Contains($pattern)) {
+                        Write-Warning "Found potential Node.js package: $packageName"
+                        try {
+                            $result = choco uninstall $packageName -y --limit-output --force --remove-dependencies 2>$null
+                            if ($LASTEXITCODE -eq 0) {
+                                Write-Success "Removed Node.js package: $packageName"
+                                $removedCount++
+                            } else {
+                                Write-Warning "Could not remove $packageName"
+                            }
+                        } catch {
+                            Write-Warning "Error removing $packageName`: $_"
+                        }
+                        break
+                    }
+                }
+            }
+        }
+    } catch {
+        Write-Warning "Could not perform comprehensive package search: $_"
     }
 
     # Remove Chocolatey itself (comprehensive cleanup)
@@ -1078,25 +1257,21 @@ function Uninstall-DevEnvironment {
                 if ($foundUbuntu.Count -gt 0) {
                     Write-Host ""
                     Write-Warning "Found Ubuntu WSL distribution(s): $($foundUbuntu -join ', ')"
-                    Write-Host "WARNING: Removing Ubuntu distributions will DELETE ALL DATA inside them!" -ForegroundColor Red
+                    Write-Host "WARNING: Automatic removal will DELETE ALL DATA inside Ubuntu distributions!" -ForegroundColor Red
                     Write-Host "This includes:" -ForegroundColor Yellow
                     Write-Host "- Your home directory and all files" -ForegroundColor Yellow
                     Write-Host "- Installed packages and configurations" -ForegroundColor Yellow
                     Write-Host "- Any development projects stored in WSL" -ForegroundColor Yellow
                     Write-Host ""
-                    Write-Host "If you have important data, consider backing it up first:" -ForegroundColor Cyan
-                    Write-Host "- Copy files to Windows: cp -r ~/important-folder /mnt/c/backup/" -ForegroundColor Cyan
-                    Write-Host "- Export configurations and package lists" -ForegroundColor Cyan
-                    Write-Host ""
+                    Write-Host "If you have important data, press Ctrl+C now to cancel!" -ForegroundColor Cyan
+                    Write-Host "Proceeding with Ubuntu distribution removal in 5 seconds..." -ForegroundColor Yellow
+                    Start-Sleep -Seconds 5
                     
-                    $removeUbuntu = Read-Host "Do you want to remove Ubuntu WSL distributions? This CANNOT be undone! (type 'DELETE' to confirm)"
+                    Write-Info "Removing Ubuntu distributions..."
+                    $removedDistros = @()
                     
-                    if ($removeUbuntu -eq "DELETE") {
-                        Write-Info "Removing Ubuntu distributions..."
-                        $removedDistros = @()
-                        
-                        foreach ($distro in $foundUbuntu) {
-                            $result = wsl --unregister $distro 2>&1
+                    foreach ($distro in $foundUbuntu) {
+                        $result = wsl --unregister $distro 2>&1
                             if ($LASTEXITCODE -eq 0) {
                                 $removedDistros += $distro
                                 Write-Success "Removed WSL distribution: $distro"
@@ -1108,10 +1283,6 @@ function Uninstall-DevEnvironment {
                         if ($removedDistros.Count -gt 0) {
                             Write-Success "Successfully removed $($removedDistros.Count) Ubuntu distribution(s): $($removedDistros -join ', ')"
                         }
-                    } else {
-                        Write-Info "Skipping Ubuntu distribution removal (user chose to keep them)"
-                        Write-Host "Note: WSL features will still be disabled, but distributions will remain" -ForegroundColor Yellow
-                    }
                 } else {
                     Write-Info "No Ubuntu distributions found to remove"
                 }
@@ -1175,19 +1346,35 @@ function Uninstall-DevEnvironment {
         Write-Warning "Could not clean up environment variables"
     }
 
-    # Remove development directories (optional)
+    # Remove development directories (automatic cleanup)
     Write-Host ""
-    $removeDirs = Read-Host "Remove development directories (~/dev, ~/projects, etc.)? (y/N)"
-    if ($removeDirs -eq "y" -or $removeDirs -eq "Y") {
-        Write-Info "Removing development directories..."
-        $devDirs = @(
-            "$env:USERPROFILE\dev",
-            "$env:USERPROFILE\projects",
-            "$env:USERPROFILE\workspace",
-            "$env:USERPROFILE\development"
-        )
+    Write-Info "Checking for development directories to remove..."
+    $devDirs = @(
+        "$env:USERPROFILE\dev",
+        "$env:USERPROFILE\projects",
+        "$env:USERPROFILE\workspace",
+        "$env:USERPROFILE\development"
+    )
 
-        foreach ($dir in $devDirs) {
+    $foundDirs = @()
+    foreach ($dir in $devDirs) {
+        if (Test-Path $dir) {
+            $foundDirs += $dir
+        }
+    }
+
+    if ($foundDirs.Count -gt 0) {
+        Write-Warning "Found development directories to remove:"
+        foreach ($dir in $foundDirs) {
+            Write-Host "  - $dir" -ForegroundColor Yellow
+        }
+        Write-Host ""
+        Write-Warning "These directories will be AUTOMATICALLY REMOVED in 5 seconds!"
+        Write-Host "Press Ctrl+C to cancel if you have important files..." -ForegroundColor Cyan
+        Start-Sleep -Seconds 5
+        
+        Write-Info "Removing development directories..."
+        foreach ($dir in $foundDirs) {
             if (Test-Path $dir) {
                 try {
                     Remove-Item -Path $dir -Recurse -Force
@@ -1198,6 +1385,8 @@ function Uninstall-DevEnvironment {
                 }
             }
         }
+    } else {
+        Write-Info "No development directories found to remove"
     }
 
     # Final summary

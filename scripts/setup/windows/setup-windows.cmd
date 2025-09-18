@@ -30,6 +30,10 @@ if %errorlevel% neq 0 (
 echo.
 echo Running Windows setup script...
 echo.
+echo NOTE: This installation is fully automated.
+echo Please do NOT press any keys unless specifically prompted.
+echo Some installations may appear to pause - this is normal.
+echo.
 
 REM Pass all arguments to the PowerShell script
 powershell -File "%~dp0setup-windows.ps1" %*
