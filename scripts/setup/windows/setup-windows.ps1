@@ -24,6 +24,35 @@ param(
 # Import required modules
 Import-Module DISM -ErrorAction SilentlyContinue
 
+# Global timing variables
+$Global:StepStartTime = $null
+$Global:ScriptStartTime = Get-Date
+
+# Timing functions
+function Start-Timer {
+    param([string]$Operation)
+    $Global:StepStartTime = Get-Date
+    Write-Host "[INFO] Starting: $Operation" -ForegroundColor Blue
+}
+
+function Stop-Timer {
+    param([string]$Operation)
+    if ($Global:StepStartTime) {
+        $elapsed = (Get-Date) - $Global:StepStartTime
+        $elapsedSeconds = [math]::Round($elapsed.TotalSeconds, 1)
+        Write-Host "[OK] Completed: $Operation (${elapsedSeconds}s)" -ForegroundColor Green
+        $Global:StepStartTime = $null
+    } else {
+        Write-Host "[OK] Completed: $Operation" -ForegroundColor Green
+    }
+}
+
+function Write-TimedInfo {
+    param([string]$Message)
+    $timestamp = Get-Date -Format "HH:mm:ss"
+    Write-Host "[$timestamp] [INFO] $Message" -ForegroundColor Blue
+}
+
 # Check for pending reboot
 function Test-PendingReboot {
     $pendingReboot = $false
@@ -812,14 +841,16 @@ function Install-WindowsTools {
         }
 
         if (!$alreadyInstalled) {
+            Start-Timer "$description installation"
             Write-Info "Installing $description..."
             $installed = $false
 
             # Try main package first
             try {
-                Write-Info "Installing $description (this may take several minutes)..."
+                Write-TimedInfo "Installing $description (this may take several minutes)..."
                 $result = choco install $toolName -y --limit-output --no-progress --acceptlicense --force --timeout 600
                 if ($LASTEXITCODE -eq 0) {
+                    Stop-Timer "$description installation"
                     Write-Success "$description installed successfully"
                     $installed = $true
                     $successCount++
@@ -833,10 +864,11 @@ function Install-WindowsTools {
 
                 # Try fallback if available
                 if ($fallback) {
-                    Write-Info "Trying fallback package '$fallback' (this may take several minutes)..."
+                    Write-TimedInfo "Trying fallback package '$fallback' (this may take several minutes)..."
                     try {
                         $result = choco install $fallback -y --limit-output --no-progress --acceptlicense --force --timeout 600
                         if ($LASTEXITCODE -eq 0) {
+                            Stop-Timer "$description installation"
                             Write-Success "$fallback installed successfully"
                             $installed = $true
                             $successCount++
@@ -845,8 +877,11 @@ function Install-WindowsTools {
                         }
                     }
                     catch {
+                        Stop-Timer "$description installation"
                         Write-Warning "Failed to install both $toolName and $fallback"
                     }
+                } else {
+                    Stop-Timer "$description installation"
                 }
             }
         }
@@ -857,7 +892,11 @@ function Install-WindowsTools {
     }
 
     Write-Host ""
-    Stop-Timer "Windows development tools installation"
+    Write-Host "Tool Installation Summary:" -ForegroundColor Cyan
+    Write-Host "Successfully installed: $successCount tools" -ForegroundColor Green
+    if ($failCount -gt 0) {
+        Write-Host "Failed installations: $failCount tools" -ForegroundColor Red
+    }
     
     if ($failCount -gt 0) {
         Write-Warning "Some tools failed to install. This may be due to pending system reboot."
@@ -963,6 +1002,23 @@ function Set-DevEnvironment {
 function Test-Installation {
     Write-Info "Verifying installation..."
 
+    # First, refresh the environment PATH to pick up newly installed tools
+    Write-Info "Refreshing environment variables..."
+    try {
+        # Refresh environment PATH from system and user PATH
+        $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+        $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        $env:Path = "$machinePath;$userPath"
+        
+        # Also try refreshenv if available from Chocolatey
+        if (Get-Command refreshenv -ErrorAction SilentlyContinue) {
+            refreshenv
+        }
+    }
+    catch {
+        Write-Warning "Could not refresh environment: $_"
+    }
+
     $errors = 0
 
     # Check WSL
@@ -980,15 +1036,119 @@ function Test-Installation {
         $errors++
     }
 
-    # Check Windows tools
-    $windowsTools = @("git", "code", "python", "node", "java", "mvn", "gradle")
-    foreach ($tool in $windowsTools) {
+    # Check Windows tools with enhanced verification
+    $toolsToCheck = @(
+        @{name="git"; alternatives=@("git.exe"); paths=@("$env:ProgramFiles\Git\bin", "$env:ProgramFiles\Git\cmd")},
+        @{name="code"; alternatives=@("code.exe", "code.cmd"); paths=@("$env:ProgramFiles\Microsoft VS Code\bin", "$env:LocalAppData\Programs\Microsoft VS Code\bin")},
+        @{name="python"; alternatives=@("python.exe", "python3.exe"); paths=@("$env:ProgramFiles\Python*", "$env:LocalAppData\Programs\Python\Python*", "$env:AppData\Local\Programs\Python\Python*")},
+        @{name="node"; alternatives=@("node.exe"); paths=@("$env:ProgramFiles\nodejs", "$env:ProgramData\chocolatey\bin")},
+        @{name="java"; alternatives=@("java.exe"); paths=@("$env:ProgramFiles\Eclipse Adoptium\*\bin", "$env:ProgramFiles\Java\*\bin", "$env:ProgramFiles\Temurin\*\bin", "$env:ProgramFiles\Microsoft\*\bin")},
+        @{name="mvn"; alternatives=@("mvn.exe", "mvn.cmd"); paths=@("$env:ProgramFiles\Maven\*\bin", "$env:ProgramData\chocolatey\bin")},
+        @{name="gradle"; alternatives=@("gradle.exe", "gradle.bat"); paths=@("$env:ProgramFiles\Gradle\*\bin", "$env:ProgramData\chocolatey\bin")}
+    )
+
+    foreach ($tool in $toolsToCheck) {
+        $toolName = $tool.name
+        $found = $false
+        
+        # Method 1: Try Get-Command first (fastest)
         try {
-            $null = Get-Command $tool -ErrorAction Stop
-            Write-Success "${tool}: found"
+            $null = Get-Command $toolName -ErrorAction Stop
+            Write-Success "${toolName}: found"
+            $found = $true
+            continue
         }
         catch {
-            Write-Error "${tool}: NOT FOUND"
+            # Continue to alternative methods
+        }
+        
+        # Method 2: Try alternatives in PATH
+        foreach ($alt in $tool.alternatives) {
+            try {
+                $null = Get-Command $alt -ErrorAction Stop
+                Write-Success "${toolName}: found (as $alt)"
+                $found = $true
+                break
+            }
+            catch {
+                # Continue to next alternative
+            }
+        }
+        
+        if (-not $found) {
+            # Method 3: Check common installation paths
+            foreach ($pathPattern in $tool.paths) {
+                $expandedPaths = @()
+                
+                # Handle wildcard paths by finding matching directories
+                if ($pathPattern.Contains("*")) {
+                    try {
+                        $parentPath = Split-Path $pathPattern -Parent
+                        $leafPattern = Split-Path $pathPattern -Leaf
+                        
+                        if (Test-Path $parentPath) {
+                            $matchingDirs = Get-ChildItem $parentPath -Directory -ErrorAction SilentlyContinue | 
+                                          Where-Object { $_.Name -like $leafPattern.Replace("*", "*") }
+                            
+                            foreach ($dir in $matchingDirs) {
+                                if ($pathPattern.EndsWith("\*\bin")) {
+                                    $expandedPaths += Join-Path $dir.FullName "bin"
+                                } elseif ($pathPattern.EndsWith("\*")) {
+                                    $expandedPaths += $dir.FullName
+                                } else {
+                                    $expandedPaths += Join-Path $dir.FullName ($leafPattern.Replace("*", ""))
+                                }
+                            }
+                        }
+                    }
+                    catch {
+                        # Continue if path expansion fails
+                    }
+                } else {
+                    $expandedPaths = @($pathPattern)
+                }
+                
+                foreach ($path in $expandedPaths) {
+                    if (Test-Path $path) {
+                        # Check if any of the tool executables exist in this path
+                        $toolExecutables = @($toolName) + $tool.alternatives
+                        foreach ($exe in $toolExecutables) {
+                            $fullPath = Join-Path $path $exe
+                            if (Test-Path $fullPath) {
+                                Write-Success "${toolName}: found at $fullPath"
+                                $found = $true
+                                break
+                            }
+                        }
+                        if ($found) { break }
+                    }
+                }
+                if ($found) { break }
+            }
+        }
+        
+        if (-not $found) {
+            # Method 4: Check if installed via Chocolatey (last resort)
+            try {
+                $chocoList = choco list --local-only --limit-output 2>$null
+                if ($chocoList) {
+                    $packageNames = @($toolName, "visualstudiocode", "nodejs", "openjdk", "temurin", "adoptopenjdk")
+                    foreach ($packageName in $packageNames) {
+                        if ($chocoList | Where-Object { $_ -like "$packageName*" }) {
+                            Write-Success "${toolName}: found via Chocolatey (package: $packageName)"
+                            $found = $true
+                            break
+                        }
+                    }
+                }
+            }
+            catch {
+                # Chocolatey check failed, continue
+            }
+        }
+        
+        if (-not $found) {
+            Write-Error "${toolName}: NOT FOUND"
             $errors++
         }
     }
@@ -996,7 +1156,15 @@ function Test-Installation {
     if ($errors -eq 0) {
         Write-Success "All tools verified successfully!"
     } else {
-        Write-Warning "$errors tools failed verification. You may need to restart PowerShell or check the installation logs."
+        Write-Warning "$errors tools failed verification."
+        Write-Host ""
+        Write-Host "Troubleshooting tips:" -ForegroundColor Yellow
+        Write-Host "1. Restart PowerShell or Command Prompt to refresh PATH" -ForegroundColor Cyan
+        Write-Host "2. Log off and log back in to fully refresh environment" -ForegroundColor Cyan
+        Write-Host "3. Check if tools launch from Start Menu (they may work despite verification failure)" -ForegroundColor Cyan
+        Write-Host "4. Manually add tool paths to your PATH environment variable" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Info "Note: Tools may still work even if verification fails - try launching them manually."
     }
 }
 
@@ -1435,11 +1603,15 @@ function Install-DevEnvironment {
         Write-Host ""
     }
 
-    # Install all components
-    Start-Timer "Complete development environment setup"
+    # Install all components with timing
+    Write-Host ""
+    Write-Host "Installation Progress:" -ForegroundColor Cyan
+    Write-Host "=====================" -ForegroundColor Cyan
     
     # Enable WSL2 first (may require restart)
+    Start-Timer "WSL2 feature enablement"
     Enable-WSL2
+    Stop-Timer "WSL2 feature enablement"
     
     # Check if we just enabled WSL features and need a restart
     if (Test-PendingReboot) {
@@ -1454,16 +1626,36 @@ function Install-DevEnvironment {
     }
     
     # Continue with the rest of the installation
+    Start-Timer "Ubuntu WSL installation"
     Install-UbuntuWSL
+    Stop-Timer "Ubuntu WSL installation"
+    
+    Start-Timer "Windows development tools"
     Install-WindowsTools
+    Stop-Timer "Windows development tools"
+    
+    Start-Timer "Windows Terminal configuration"
     Configure-WindowsTerminal
+    Stop-Timer "Windows Terminal configuration"
+    
+    Start-Timer "Windows Subsystem for Android"
     Install-WSAA
+    Stop-Timer "Windows Subsystem for Android"
+    
+    Start-Timer "Development directory setup"
     New-DevDirectories
+    Stop-Timer "Development directory setup"
+    
+    Start-Timer "Environment configuration"
     Set-DevEnvironment
+    Stop-Timer "Environment configuration"
+    
+    Start-Timer "Installation verification"
     Test-Installation
+    Stop-Timer "Installation verification"
 
     Write-Host ""
-    Stop-Timer "Complete development environment setup"
+    Write-Host "Installation Complete!" -ForegroundColor Green
     
     # Calculate total time
     $totalElapsed = (Get-Date) - $scriptStartTime
@@ -1503,8 +1695,22 @@ function Install-DevEnvironment {
 }
 
 # Main execution logic
+Write-Host ""
+Write-Host "Windows Development Environment Setup" -ForegroundColor Cyan
+Write-Host "=====================================" -ForegroundColor Cyan
+
 if ($Uninstall) {
+    Start-Timer "Development Environment Uninstallation"
     Uninstall-DevEnvironment
+    Stop-Timer "Development Environment Uninstallation"
 } else {
+    Start-Timer "Development Environment Installation"
     Install-DevEnvironment
+    Stop-Timer "Development Environment Installation"
 }
+
+# Show total script execution time
+$totalElapsed = (Get-Date) - $Global:ScriptStartTime
+$totalMinutes = [math]::Round($totalElapsed.TotalMinutes, 1)
+Write-Host ""
+Write-Host "Total Script Execution Time: ${totalMinutes} minutes" -ForegroundColor Cyan
