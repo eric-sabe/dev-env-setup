@@ -60,15 +60,15 @@ This script will:
 
 **Requirements**: Windows 10/11 with WSL2 capability
 
-**Step 1 - Windows Setup** (Run PowerShell as Administrator):
-```powershell
+**Step 1 - Windows Setup** (Run Command Prompt as Administrator):
+```cmd
 cd C:\path\to\dev-scripts
-.\setup\windows\setup-windows.ps1
+.\setup\windows\setup-windows.cmd
 ```
 
-> PowerShell execution policy
+> The CMD wrapper automatically handles PowerShell execution policy and administrator checks.
 
-If you see "running scripts is disabled on this system", use one of these:
+If you prefer to run the PowerShell script directly, use:
 
 ```powershell
 # Safest: applies only to this shell session

@@ -29,7 +29,7 @@ A comprehensive collection of scripts to set up and manage development environme
 3. **Run platform setup**:
    - **macOS**: `./scripts/setup/macos/setup-mac.sh`
    - **Linux**: `./scripts/setup/linux/setup-linux.sh`
-   - **Windows**: `./scripts/setup/windows/setup-windows.ps1` then `./scripts/setup/windows/setup-wsl.sh`
+   - **Windows**: `./scripts/setup/windows/setup-windows.cmd` then `./scripts/setup/windows/setup-wsl.sh`
 
 4. **Create your first project**:
    - **Python**: `./scripts/quickstart/quickstart-python.sh`
@@ -66,6 +66,8 @@ A comprehensive collection of scripts to set up and manage development environme
 | `scripts/validate.sh` | Static analysis runner (shellcheck) |
 
 ## 📖 Documentation
+
+For detailed setup instructions, troubleshooting, and advanced configuration options, see the [**Setup Guide**](guide.md).
 
 ## 🧪 Platform Features (Experimental)
 The following components are early-stage and may change or be removed while we refocus on core student setup workflows:

@@ -1,12 +1,19 @@
 #Requires -Version 5.1
 # Windows Development Environment Setup Script
 # Comprehensive setup for CS students - Windows 11 with WSL2
+# Automatically detects and handles Parallels Desktop on Apple Silicon
 #
 # Usage:
-#   .\setup-windows.ps1                    # Install everything
+#   .\setup-windows.cmd                    # Recommended: Use CMD wrapper (handles execution policy)
+#   .\setup-windows.ps1                    # Direct PowerShell execution
 #   .\setup-windows.ps1 -SkipWSLInstall    # Skip WSL2 installation
 #   .\setup-windows.ps1 -SkipWindowsTools  # Skip Windows tools installation
 #   .\setup-windows.ps1 -Uninstall         # Remove everything installed by this script
+#
+# Notes:
+#   - When running on Parallels Desktop with Apple Silicon, WSL2 installation
+#     will be automatically skipped due to compatibility limitations
+#   - All Windows-native development tools will still be installed and work normally
 
 param(
     [switch]$SkipWSLInstall,
@@ -139,6 +146,162 @@ function Test-NestedVirtualization {
         }
 
         return ($envVarSet -and $wslConfigSet -and $cpuVirtEnabled)
+    }
+    catch {
+        return $false
+    }
+}
+
+# Check if running on Parallels Desktop with Apple Silicon
+function Test-ParallelsAppleSilicon {
+    try {
+        $isParallels = $false
+        $isARM = $false
+        
+        # === PARALLELS DETECTION ===
+        
+        # 1. Check system manufacturer and model (most reliable)
+        $computerSystem = Get-WmiObject -Class Win32_ComputerSystem -ErrorAction SilentlyContinue
+        if ($computerSystem) {
+            $manufacturer = $computerSystem.Manufacturer
+            $model = $computerSystem.Model
+            
+            # Parallels sets specific manufacturer/model strings
+            $parallelsManufacturers = @(
+                "Parallels Software International Inc.",
+                "Parallels",
+                "Parallels International GmbH"
+            )
+            
+            $parallelsModels = @(
+                "Parallels Virtual Platform",
+                "Parallels ARM Virtual Machine",
+                "Parallels Virtual Machine"
+            )
+            
+            if ($parallelsManufacturers -contains $manufacturer -or $parallelsModels -contains $model) {
+                $isParallels = $true
+                Write-Info "Parallels detected via manufacturer/model: $manufacturer / $model"
+            }
+        }
+        
+        # 2. Check BIOS information
+        if (-not $isParallels) {
+            $bios = Get-WmiObject -Class Win32_BIOS -ErrorAction SilentlyContinue
+            if ($bios -and ($bios.Manufacturer -like "*Parallels*" -or $bios.Version -like "*Parallels*")) {
+                $isParallels = $true
+                Write-Info "Parallels detected via BIOS: $($bios.Manufacturer) / $($bios.Version)"
+            }
+        }
+        
+        # 3. Check for Parallels registry keys
+        if (-not $isParallels) {
+            $parallelsRegKeys = @(
+                "HKLM:\SOFTWARE\Parallels",
+                "HKLM:\SYSTEM\CurrentControlSet\Services\prl_fs",
+                "HKLM:\SYSTEM\CurrentControlSet\Services\prl_tg",
+                "HKLM:\SYSTEM\CurrentControlSet\Services\prl_eth"
+            )
+            
+            foreach ($key in $parallelsRegKeys) {
+                if (Test-Path $key -ErrorAction SilentlyContinue) {
+                    $isParallels = $true
+                    Write-Info "Parallels detected via registry key: $key"
+                    break
+                }
+            }
+        }
+        
+        # 4. Check for Parallels files and drivers
+        if (-not $isParallels) {
+            $parallelsFiles = @(
+                "C:\Windows\System32\drivers\prl_fs.sys",
+                "C:\Windows\System32\drivers\prl_tg.sys",
+                "C:\Windows\System32\drivers\prl_eth.sys",
+                "C:\Program Files\Parallels\Parallels Tools",
+                "C:\Windows\System32\prlvmagt.exe"
+            )
+            
+            foreach ($file in $parallelsFiles) {
+                if (Test-Path $file -ErrorAction SilentlyContinue) {
+                    $isParallels = $true
+                    Write-Info "Parallels detected via file: $file"
+                    break
+                }
+            }
+        }
+        
+        # 5. Check for Parallels services
+        if (-not $isParallels) {
+            $parallelsServices = @("prl_tools", "prl_cc", "prl_tg", "prl_fs")
+            foreach ($serviceName in $parallelsServices) {
+                if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
+                    $isParallels = $true
+                    Write-Info "Parallels detected via service: $serviceName"
+                    break
+                }
+            }
+        }
+        
+        # 6. Check PCI devices for Parallels hardware
+        if (-not $isParallels) {
+            $pciDevices = Get-WmiObject -Class Win32_PnPEntity -ErrorAction SilentlyContinue | Where-Object { 
+                $_.HardwareID -like "*PRL*" -or $_.DeviceID -like "*PRL*" -or $_.Name -like "*Parallels*" 
+            }
+            if ($pciDevices.Count -gt 0) {
+                $isParallels = $true
+                Write-Info "Parallels detected via PCI device: $($pciDevices[0].Name)"
+            }
+        }
+        
+        # === ARM DETECTION ===
+        
+        # 1. Check processor architecture via WMI
+        $processor = Get-WmiObject -Class Win32_Processor -ErrorAction SilentlyContinue
+        if ($processor) {
+            # Architecture 12 = ARM64, also check processor name
+            if ($processor.Architecture -eq 12 -or $processor.Name -like "*ARM*" -or $processor.Name -like "*Apple*") {
+                $isARM = $true
+                Write-Info "ARM detected via processor: $($processor.Name) (Architecture: $($processor.Architecture))"
+            }
+        }
+        
+        # 2. Check environment variables
+        if (-not $isARM) {
+            if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64" -or $env:PROCESSOR_ARCHITEW6432 -eq "ARM64") {
+                $isARM = $true
+                Write-Info "ARM detected via environment: $($env:PROCESSOR_ARCHITECTURE)"
+            }
+        }
+        
+        # 3. Check via .NET runtime
+        if (-not $isARM) {
+            try {
+                $runtimeArch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+                if ($runtimeArch -eq "Arm64") {
+                    $isARM = $true
+                    Write-Info "ARM detected via .NET runtime: $runtimeArch"
+                }
+            } catch {
+                # .NET method not available, skip
+            }
+        }
+        
+        # Final result
+        $result = $isParallels -and $isARM
+        
+        if ($result) {
+            Write-Warning "CONFIRMED: Running on Parallels Desktop with Apple Silicon (ARM64)"
+            Write-Info "WSL2 has known compatibility issues in this environment"
+        } elseif ($isParallels -and -not $isARM) {
+            Write-Info "Parallels Desktop detected but not on ARM architecture"
+        } elseif (-not $isParallels -and $isARM) {
+            Write-Info "ARM architecture detected but not in Parallels Desktop"
+        } else {
+            Write-Info "Native Windows environment detected"
+        }
+        
+        return $result
     }
     catch {
         return $false
@@ -1048,7 +1211,7 @@ function Uninstall-DevEnvironment {
     Write-Host "Note: Some files may remain if they were in use during uninstallation." -ForegroundColor Yellow
     Write-Host "You may need to restart your computer for all changes to take effect." -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "To reinstall, run: .\setup-windows.ps1" -ForegroundColor Blue
+    Write-Host "To reinstall, run: .\setup-windows.cmd" -ForegroundColor Blue
 }
 
 # Main installation function
@@ -1065,6 +1228,24 @@ function Install-DevEnvironment {
 
     Test-WindowsVersion
 
+    # Check for Parallels on Apple Silicon and set SkipWSLInstall accordingly
+    Write-Host ""
+    Write-Host "System Detection:" -ForegroundColor Cyan
+    Write-Host "=================" -ForegroundColor Cyan
+    
+    $script:isParallelsAppleSilicon = Test-ParallelsAppleSilicon
+    
+    if ($script:isParallelsAppleSilicon) {
+        $script:SkipWSLInstall = $true
+        Write-Host ""
+        Write-Warning "PARALLELS ON APPLE SILICON DETECTED!"
+        Write-Warning "Automatically skipping WSL installation due to compatibility limitations"
+        Write-Host ""
+    } else {
+        Write-Host "Proceeding with full Windows development environment installation" -ForegroundColor Green
+        Write-Host ""
+    }
+
     # Install all components
     Start-Timer "Complete development environment setup"
     
@@ -1077,7 +1258,7 @@ function Install-DevEnvironment {
         Write-Info "After restart, run this script again to complete Ubuntu and tools installation."
         Write-Host ""
         Write-Host "Next steps after restart:" -ForegroundColor Yellow
-        Write-Host "1. Run this script again as Administrator: .\setup-windows.ps1" -ForegroundColor Yellow
+        Write-Host "1. Run this script again as Administrator: .\setup-windows.cmd" -ForegroundColor Yellow
         Write-Host "2. Complete Ubuntu setup when prompted" -ForegroundColor Yellow
         Write-Host "3. Install VS Code extensions for your languages" -ForegroundColor Yellow
         return
@@ -1105,11 +1286,28 @@ function Install-DevEnvironment {
     Write-Host ""
     Write-Host "Windows Development Environment Setup Complete" -ForegroundColor Green
     Write-Host ""
-    Write-Host "Next steps:" -ForegroundColor Yellow
-    Write-Host "1. Launch Ubuntu from Start Menu and complete setup" -ForegroundColor Yellow
-    Write-Host "2. Run the WSL setup script: wsl bash ~/dev-scripts/setup/windows/setup-wsl.sh" -ForegroundColor Yellow
-    Write-Host "3. Install VS Code extensions for your languages" -ForegroundColor Yellow
-    Write-Host "4. Use the quickstart scripts to create new projects" -ForegroundColor Yellow
+    
+    if ($script:SkipWSLInstall) {
+        if ($script:isParallelsAppleSilicon) {
+            Write-Host "Next steps (Parallels on Apple Silicon):" -ForegroundColor Yellow
+            Write-Host "1. Use Windows-native development tools and IDEs" -ForegroundColor Yellow
+            Write-Host "2. Install VS Code extensions for your languages" -ForegroundColor Yellow
+            Write-Host "3. Use PowerShell for command-line operations" -ForegroundColor Yellow
+            Write-Host "4. Use the quickstart scripts to create new projects" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "Note: WSL2 and Ubuntu were skipped due to compatibility limitations with Parallels on Apple Silicon" -ForegroundColor Cyan
+        } else {
+            Write-Host "Next steps (WSL installation skipped):" -ForegroundColor Yellow
+            Write-Host "1. Install VS Code extensions for your languages" -ForegroundColor Yellow
+            Write-Host "2. Use the quickstart scripts to create new projects" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "Next steps:" -ForegroundColor Yellow
+        Write-Host "1. Launch Ubuntu from Start Menu and complete setup" -ForegroundColor Yellow
+        Write-Host "2. Run the WSL setup script: wsl bash ~/dev-scripts/setup/windows/setup-wsl.sh" -ForegroundColor Yellow
+        Write-Host "3. Install VS Code extensions for your languages" -ForegroundColor Yellow
+        Write-Host "4. Use the quickstart scripts to create new projects" -ForegroundColor Yellow
+    }
 
     Write-Host ""
     Write-Host "Happy coding!" -ForegroundColor Blue
