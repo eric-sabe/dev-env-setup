@@ -855,19 +855,43 @@ function Install-WindowsTools {
                     }
                 }
             } elseif ($toolName -eq "gitkraken") {
-                # GitKraken is a GUI app that may not be in PATH, check for installation directory
-                $gitKrakenPaths = @(
-                    "$env:LOCALAPPDATA\gitkraken",
-                    "$env:APPDATA\gitkraken",
-                    "$env:ProgramFiles\GitKraken",
-                    "$env:ProgramFiles(x86)\GitKraken"
+                # GitKraken is a GUI app that may not be in PATH, check for actual executable
+                # Note: GitKraken leaves behind %LOCALAPPDATA%\gitkraken folder even after uninstall
+                # so we need to check for the actual executable, not just the folder
+                $gitKrakenExecutables = @(
+                    "$env:LOCALAPPDATA\gitkraken\GitKraken.exe",
+                    "$env:LOCALAPPDATA\gitkraken\app-*\GitKraken.exe",
+                    "$env:APPDATA\gitkraken\GitKraken.exe",
+                    "$env:APPDATA\gitkraken\app-*\GitKraken.exe",
+                    "$env:ProgramFiles\GitKraken\GitKraken.exe",
+                    "$env:ProgramFiles(x86)\GitKraken\GitKraken.exe"
                 )
-                foreach ($path in $gitKrakenPaths) {
-                    if (Test-Path $path) {
-                        Write-Success "$description already installed (found at $path)"
-                        $alreadyInstalled = $true
-                        $successCount++
-                        break
+                foreach ($exePath in $gitKrakenExecutables) {
+                    if ($exePath -like "*app-*") {
+                        # Handle wildcard paths for versioned app directories
+                        $parentDir = Split-Path $exePath -Parent
+                        $baseDir = $parentDir -replace "\\app-\*$", ""
+                        if (Test-Path $baseDir) {
+                            $appDirs = Get-ChildItem -Path $baseDir -Directory -Name "app-*" -ErrorAction SilentlyContinue
+                            foreach ($appDir in $appDirs) {
+                                $fullExePath = Join-Path $baseDir $appDir "GitKraken.exe"
+                                if (Test-Path $fullExePath) {
+                                    Write-Success "$description already installed (found $fullExePath)"
+                                    $alreadyInstalled = $true
+                                    $successCount++
+                                    break
+                                }
+                            }
+                            if ($alreadyInstalled) { break }
+                        }
+                    } else {
+                        # Handle direct paths
+                        if (Test-Path $exePath) {
+                            Write-Success "$description already installed (found $exePath)"
+                            $alreadyInstalled = $true
+                            $successCount++
+                            break
+                        }
                     }
                 }
                 if (-not $alreadyInstalled) {
@@ -1131,17 +1155,40 @@ function Test-Installation {
         
         # Special handling for GitKraken (GUI app that may not be in PATH)
         if ($toolName -eq "gitkraken" -and -not $found) {
-            $gitKrakenPaths = @(
-                "$env:LOCALAPPDATA\gitkraken",
-                "$env:APPDATA\gitkraken", 
-                "$env:ProgramFiles\GitKraken",
-                "$env:ProgramFiles(x86)\GitKraken"
+            # GitKraken leaves behind %LOCALAPPDATA%\gitkraken folder even after uninstall
+            # so we need to check for the actual executable, not just the folder
+            $gitKrakenExecutables = @(
+                "$env:LOCALAPPDATA\gitkraken\GitKraken.exe",
+                "$env:LOCALAPPDATA\gitkraken\app-*\GitKraken.exe",
+                "$env:APPDATA\gitkraken\GitKraken.exe",
+                "$env:APPDATA\gitkraken\app-*\GitKraken.exe",
+                "$env:ProgramFiles\GitKraken\GitKraken.exe",
+                "$env:ProgramFiles(x86)\GitKraken\GitKraken.exe"
             )
-            foreach ($path in $gitKrakenPaths) {
-                if (Test-Path $path) {
-                    Write-Success "${toolName}: found (at $path)"
-                    $found = $true
-                    break
+            foreach ($exePath in $gitKrakenExecutables) {
+                if ($exePath -like "*app-*") {
+                    # Handle wildcard paths for versioned app directories
+                    $parentDir = Split-Path $exePath -Parent
+                    $baseDir = $parentDir -replace "\\app-\*$", ""
+                    if (Test-Path $baseDir) {
+                        $appDirs = Get-ChildItem -Path $baseDir -Directory -Name "app-*" -ErrorAction SilentlyContinue
+                        foreach ($appDir in $appDirs) {
+                            $fullExePath = Join-Path $baseDir $appDir "GitKraken.exe"
+                            if (Test-Path $fullExePath) {
+                                Write-Success "${toolName}: found ($fullExePath)"
+                                $found = $true
+                                break
+                            }
+                        }
+                        if ($found) { break }
+                    }
+                } else {
+                    # Handle direct paths
+                    if (Test-Path $exePath) {
+                        Write-Success "${toolName}: found ($exePath)"
+                        $found = $true
+                        break
+                    }
                 }
             }
         }
