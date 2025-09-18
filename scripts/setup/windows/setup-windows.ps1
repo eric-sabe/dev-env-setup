@@ -1638,12 +1638,32 @@ function Install-DevEnvironment {
     # Check if we just enabled WSL features and need a restart
     if (Test-PendingReboot) {
         Write-Warning "Windows features were just enabled and require a restart to activate."
-        Write-Info "After restart, run this script again to complete Ubuntu and tools installation."
-        Write-Host ""
-        Write-Host "Next steps after restart:" -ForegroundColor Yellow
-        Write-Host "1. Run this script again as Administrator: .\setup-windows.cmd" -ForegroundColor Yellow
-        Write-Host "2. Complete Ubuntu setup when prompted" -ForegroundColor Yellow
-        Write-Host "3. Install VS Code extensions for your languages" -ForegroundColor Yellow
+        
+        if ($script:SkipWSLInstall) {
+            if ($script:isParallelsAppleSilicon) {
+                Write-Info "After restart, run this script again to complete tools installation."
+                Write-Host ""
+                Write-Host "Next steps after restart:" -ForegroundColor Yellow
+                Write-Host "1. Run this script again as Administrator: .\setup-windows.cmd" -ForegroundColor Yellow
+                Write-Host "2. Install VS Code extensions for your languages" -ForegroundColor Yellow
+                Write-Host "3. Use Windows-native development tools and IDEs" -ForegroundColor Yellow
+                Write-Host ""
+                Write-Host "Note: Ubuntu/WSL setup is skipped due to Parallels on Apple Silicon compatibility" -ForegroundColor Cyan
+            } else {
+                Write-Info "After restart, run this script again to complete tools installation."
+                Write-Host ""
+                Write-Host "Next steps after restart:" -ForegroundColor Yellow
+                Write-Host "1. Run this script again as Administrator: .\setup-windows.cmd" -ForegroundColor Yellow
+                Write-Host "2. Install VS Code extensions for your languages" -ForegroundColor Yellow
+            }
+        } else {
+            Write-Info "After restart, run this script again to complete Ubuntu and tools installation."
+            Write-Host ""
+            Write-Host "Next steps after restart:" -ForegroundColor Yellow
+            Write-Host "1. Run this script again as Administrator: .\setup-windows.cmd" -ForegroundColor Yellow
+            Write-Host "2. Complete Ubuntu setup when prompted" -ForegroundColor Yellow
+            Write-Host "3. Install VS Code extensions for your languages" -ForegroundColor Yellow
+        }
         return
     }
     
