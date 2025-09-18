@@ -811,6 +811,7 @@ function Install-WindowsTools {
         @{name="openjdk"; fallback="temurin"; description="OpenJDK Java"},
         @{name="maven"; fallback=$null; description="Maven build tool"},
         @{name="gradle"; fallback=$null; description="Gradle build tool"},
+        @{name="cmake"; fallback=$null; description="CMake build system"},
         @{name="docker-desktop"; fallback=$null; description="Docker Desktop"},
         @{name="postman"; fallback=$null; description="Postman API testing"},
         @{name="gitkraken"; fallback=$null; description="GitKraken Git GUI"},
@@ -1096,7 +1097,8 @@ function Test-Installation {
         @{name="node"; alternatives=@("node.exe"); paths=@("$env:ProgramFiles\nodejs", "$env:ProgramData\chocolatey\bin")},
         @{name="java"; alternatives=@("java.exe"); paths=@("$env:ProgramFiles\Eclipse Adoptium\*\bin", "$env:ProgramFiles\Java\*\bin", "$env:ProgramFiles\Temurin\*\bin", "$env:ProgramFiles\Microsoft\*\bin")},
         @{name="mvn"; alternatives=@("mvn.exe", "mvn.cmd"); paths=@("$env:ProgramFiles\Maven\*\bin", "$env:ProgramData\chocolatey\bin")},
-        @{name="gradle"; alternatives=@("gradle.exe", "gradle.bat"); paths=@("$env:ProgramFiles\Gradle\*\bin", "$env:ProgramData\chocolatey\bin")}
+        @{name="gradle"; alternatives=@("gradle.exe", "gradle.bat"); paths=@("$env:ProgramFiles\Gradle\*\bin", "$env:ProgramData\chocolatey\bin")},
+        @{name="cmake"; alternatives=@("cmake.exe"); paths=@("$env:ProgramFiles\CMake\bin", "$env:ProgramData\chocolatey\bin")}
     )
 
     foreach ($tool in $toolsToCheck) {
@@ -1322,6 +1324,7 @@ function Uninstall-DevEnvironment {
         @{name="openjdk"; alternatives=@("temurin")},
         @{name="maven"; alternatives=@()},
         @{name="gradle"; alternatives=@()},
+        @{name="cmake"; alternatives=@()},
         @{name="docker-desktop"; alternatives=@()},
         @{name="postman"; alternatives=@()},
         @{name="gitkraken"; alternatives=@()},
