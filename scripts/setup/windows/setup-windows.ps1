@@ -831,16 +831,23 @@ function Install-WindowsTools {
         # Check if tool is already installed
         $alreadyInstalled = $false
         try {
-            # For Python, check multiple possible commands
+            # For Python, check multiple possible commands and verify they work
             if ($toolName -eq "python") {
                 $pythonCommands = @("python", "python3", "py")
                 foreach ($cmd in $pythonCommands) {
                     try {
                         $null = Get-Command $cmd -ErrorAction Stop
-                        Write-Success "$description already installed (found $cmd)"
-                        $alreadyInstalled = $true
-                        $successCount++
-                        break
+                        # Verify it's actually a working Python installation (not Windows Store stub)
+                        $pythonVersion = & $cmd --version 2>$null
+                        if ($pythonVersion -and $pythonVersion -match "Python \d+\.\d+") {
+                            Write-Success "$description already installed (found $cmd - $pythonVersion)"
+                            $alreadyInstalled = $true
+                            $successCount++
+                            break
+                        } else {
+                            # Found command but it's not working (likely Windows Store stub)
+                            Write-Info "Found $cmd but it appears to be a Windows Store stub, not a real installation"
+                        }
                     }
                     catch {
                         # Continue to next command
@@ -1099,9 +1106,22 @@ function Test-Installation {
         # Method 1: Try Get-Command first (fastest)
         try {
             $null = Get-Command $toolName -ErrorAction Stop
-            Write-Success "${toolName}: found"
-            $found = $true
-            continue
+            
+            # Special verification for Python to avoid Windows Store stub false positives
+            if ($toolName -eq "python") {
+                $pythonVersion = & $toolName --version 2>$null
+                if ($pythonVersion -and $pythonVersion -match "Python \d+\.\d+") {
+                    Write-Success "${toolName}: found ($pythonVersion)"
+                    $found = $true
+                    continue
+                } else {
+                    # Found command but it's likely Windows Store stub, continue to other methods
+                }
+            } else {
+                Write-Success "${toolName}: found"
+                $found = $true
+                continue
+            }
         }
         catch {
             # Continue to alternative methods
@@ -1120,6 +1140,25 @@ function Test-Installation {
                     Write-Success "${toolName}: found (at $path)"
                     $found = $true
                     break
+                }
+            }
+        }
+        
+        # Special handling for Python alternatives (python3, py) with verification
+        if ($toolName -eq "python" -and -not $found) {
+            $pythonCommands = @("python3", "py", "python")
+            foreach ($cmd in $pythonCommands) {
+                try {
+                    $null = Get-Command $cmd -ErrorAction Stop
+                    $pythonVersion = & $cmd --version 2>$null
+                    if ($pythonVersion -and $pythonVersion -match "Python \d+\.\d+") {
+                        Write-Success "${toolName}: found (as $cmd - $pythonVersion)"
+                        $found = $true
+                        break
+                    }
+                }
+                catch {
+                    # Continue to next Python command
                 }
             }
         }
