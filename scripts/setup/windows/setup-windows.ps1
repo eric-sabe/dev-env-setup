@@ -1117,12 +1117,18 @@ function Test-Installation {
     $toolsToCheck = @(
         @{name="git"; alternatives=@("git.exe"); paths=@("$env:ProgramFiles\Git\bin", "$env:ProgramFiles\Git\cmd")},
         @{name="code"; alternatives=@("code.exe", "code.cmd"); paths=@("$env:ProgramFiles\Microsoft VS Code\bin", "$env:LocalAppData\Programs\Microsoft VS Code\bin")},
+        @{name="eclipse"; alternatives=@("eclipse.exe"); paths=@("$env:ProgramFiles\Eclipse Foundation\*", "$env:LocalAppData\Programs\Eclipse*")},
         @{name="python"; alternatives=@("python.exe", "python3.exe", "py.exe"); paths=@("$env:ProgramFiles\Python*", "$env:LocalAppData\Programs\Python\Python*", "$env:AppData\Local\Programs\Python\Python*", "$env:USERPROFILE\AppData\Local\Microsoft\WindowsApps", "$env:ProgramData\chocolatey\bin")},
         @{name="node"; alternatives=@("node.exe"); paths=@("$env:ProgramFiles\nodejs", "$env:ProgramData\chocolatey\bin")},
         @{name="java"; alternatives=@("java.exe"); paths=@("$env:ProgramFiles\Eclipse Adoptium\*\bin", "$env:ProgramFiles\Java\*\bin", "$env:ProgramFiles\Temurin\*\bin", "$env:ProgramFiles\Microsoft\*\bin")},
         @{name="mvn"; alternatives=@("mvn.exe", "mvn.cmd"); paths=@("$env:ProgramFiles\Maven\*\bin", "$env:ProgramData\chocolatey\bin")},
         @{name="gradle"; alternatives=@("gradle.exe", "gradle.bat"); paths=@("$env:ProgramFiles\Gradle\*\bin", "$env:ProgramData\chocolatey\bin")},
-        @{name="cmake"; alternatives=@("cmake.exe"); paths=@("$env:ProgramFiles\CMake\bin", "$env:ProgramData\chocolatey\bin")}
+        @{name="cmake"; alternatives=@("cmake.exe"); paths=@("$env:ProgramFiles\CMake\bin", "$env:ProgramData\chocolatey\bin")},
+        @{name="docker"; alternatives=@("docker.exe"); paths=@("$env:ProgramFiles\Docker\Docker\resources\bin", "$env:ProgramData\chocolatey\bin")},
+        @{name="postman"; alternatives=@("Postman.exe"); paths=@("$env:LocalAppData\Postman", "$env:ProgramFiles\Postman")},
+        @{name="gitkraken"; alternatives=@(); paths=@()}, # Special handling implemented separately
+        @{name="wt"; alternatives=@("wt.exe"); paths=@("$env:LocalAppData\Microsoft\WindowsApps", "$env:ProgramFiles\WindowsApps\Microsoft.WindowsTerminal*")},
+        @{name="pwsh"; alternatives=@("pwsh.exe", "powershell.exe"); paths=@("$env:ProgramFiles\PowerShell\*", "$env:ProgramData\chocolatey\bin")}
     )
 
     foreach ($tool in $toolsToCheck) {
