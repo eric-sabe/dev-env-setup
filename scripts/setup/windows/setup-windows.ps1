@@ -806,7 +806,7 @@ function Install-WindowsTools {
         @{name="git"; fallback=$null; description="Git version control"},
         @{name="visualstudiocode"; fallback=$null; description="Visual Studio Code editor"},
         @{name="eclipse"; fallback="eclipse-java"; description="Eclipse IDE"},
-        @{name="python"; fallback=$null; description="Python programming language"},
+        @{name="python"; fallback="python3"; description="Python programming language"},
         @{name="nodejs"; fallback=$null; description="Node.js runtime"},
         @{name="openjdk"; fallback="temurin"; description="OpenJDK Java"},
         @{name="maven"; fallback=$null; description="Maven build tool"},
@@ -831,10 +831,27 @@ function Install-WindowsTools {
         # Check if tool is already installed
         $alreadyInstalled = $false
         try {
-            $null = Get-Command $toolName -ErrorAction Stop
-            Write-Success "$description already installed"
-            $alreadyInstalled = $true
-            $successCount++
+            # For Python, check multiple possible commands
+            if ($toolName -eq "python") {
+                $pythonCommands = @("python", "python3", "py")
+                foreach ($cmd in $pythonCommands) {
+                    try {
+                        $null = Get-Command $cmd -ErrorAction Stop
+                        Write-Success "$description already installed (found $cmd)"
+                        $alreadyInstalled = $true
+                        $successCount++
+                        break
+                    }
+                    catch {
+                        # Continue to next command
+                    }
+                }
+            } else {
+                $null = Get-Command $toolName -ErrorAction Stop
+                Write-Success "$description already installed"
+                $alreadyInstalled = $true
+                $successCount++
+            }
         }
         catch {
             # Tool not found, proceed with installation
@@ -1040,7 +1057,7 @@ function Test-Installation {
     $toolsToCheck = @(
         @{name="git"; alternatives=@("git.exe"); paths=@("$env:ProgramFiles\Git\bin", "$env:ProgramFiles\Git\cmd")},
         @{name="code"; alternatives=@("code.exe", "code.cmd"); paths=@("$env:ProgramFiles\Microsoft VS Code\bin", "$env:LocalAppData\Programs\Microsoft VS Code\bin")},
-        @{name="python"; alternatives=@("python.exe", "python3.exe"); paths=@("$env:ProgramFiles\Python*", "$env:LocalAppData\Programs\Python\Python*", "$env:AppData\Local\Programs\Python\Python*")},
+        @{name="python"; alternatives=@("python.exe", "python3.exe", "py.exe"); paths=@("$env:ProgramFiles\Python*", "$env:LocalAppData\Programs\Python\Python*", "$env:AppData\Local\Programs\Python\Python*", "$env:USERPROFILE\AppData\Local\Microsoft\WindowsApps", "$env:ProgramData\chocolatey\bin")},
         @{name="node"; alternatives=@("node.exe"); paths=@("$env:ProgramFiles\nodejs", "$env:ProgramData\chocolatey\bin")},
         @{name="java"; alternatives=@("java.exe"); paths=@("$env:ProgramFiles\Eclipse Adoptium\*\bin", "$env:ProgramFiles\Java\*\bin", "$env:ProgramFiles\Temurin\*\bin", "$env:ProgramFiles\Microsoft\*\bin")},
         @{name="mvn"; alternatives=@("mvn.exe", "mvn.cmd"); paths=@("$env:ProgramFiles\Maven\*\bin", "$env:ProgramData\chocolatey\bin")},
@@ -1128,11 +1145,21 @@ function Test-Installation {
         }
         
         if (-not $found) {
-            # Method 4: Check if installed via Chocolatey (last resort)
+            # Method 4: Check if installed via Chocolatey (matches our installation)
             try {
                 $chocoList = choco list --local-only --limit-output 2>$null
                 if ($chocoList) {
-                    $packageNames = @($toolName, "visualstudiocode", "nodejs", "openjdk", "temurin", "adoptopenjdk")
+                    # Check for the exact packages we install, plus their fallbacks
+                    $packageNames = switch ($toolName) {
+                        "code" { @("visualstudiocode") }
+                        "node" { @("nodejs") }
+                        "java" { @("openjdk", "temurin") }
+                        "python" { @("python", "python3") }
+                        "mvn" { @("maven") }
+                        "gradle" { @("gradle") }
+                        default { @($toolName) }
+                    }
+                    
                     foreach ($packageName in $packageNames) {
                         if ($chocoList | Where-Object { $_ -like "$packageName*" }) {
                             Write-Success "${toolName}: found via Chocolatey (package: $packageName)"
@@ -1197,19 +1224,19 @@ function Uninstall-DevEnvironment {
     # Remove Chocolatey packages (skip critical system tools)
     Write-Info "Removing Chocolatey packages..."
     
-    # Enhanced package list with alternatives for better detection
+    # Enhanced package list - matches exactly what we install
     $tools = @(
-        @{name="visualstudiocode"; alternatives=@("vscode")},
+        @{name="visualstudiocode"; alternatives=@()},
         @{name="eclipse"; alternatives=@("eclipse-java")},
         @{name="python"; alternatives=@("python3")},
-        @{name="nodejs"; alternatives=@("node", "nodejs.install")},
-        @{name="openjdk"; alternatives=@("temurin", "adoptopenjdk")},
+        @{name="nodejs"; alternatives=@()},
+        @{name="openjdk"; alternatives=@("temurin")},
         @{name="maven"; alternatives=@()},
         @{name="gradle"; alternatives=@()},
-        @{name="docker-desktop"; alternatives=@("docker")},
+        @{name="docker-desktop"; alternatives=@()},
         @{name="postman"; alternatives=@()},
-        @{name="gitkraken"; alternatives=@("git-kraken")},
-        @{name="microsoft-windows-terminal"; alternatives=@("microsoft-terminal", "windows-terminal")},
+        @{name="gitkraken"; alternatives=@()},
+        @{name="microsoft-windows-terminal"; alternatives=@("microsoft-terminal")},
         @{name="powershell-core"; alternatives=@("powershell")}
     )
 
@@ -1279,61 +1306,6 @@ function Uninstall-DevEnvironment {
         if (-not $removed) {
             Write-Info "$toolName not installed or already removed"
         }
-    }
-
-    # Special comprehensive search for VSCode and Node.js (common problem packages)
-    Write-Info "Performing comprehensive search for VSCode and Node.js packages..."
-    try {
-        $installedPackages = choco list --local-only --limit-output 2>$null
-        if ($installedPackages) {
-            # Search for any package containing "code", "vscode", "visual", "node", "nodejs"
-            $vscodePatterns = @("code", "vscode", "visual")
-            $nodePatterns = @("node", "nodejs")
-            
-            foreach ($package in $installedPackages) {
-                $packageName = ($package -split '\|')[0].ToLower()
-                
-                # Check for VSCode variants
-                foreach ($pattern in $vscodePatterns) {
-                    if ($packageName.Contains($pattern)) {
-                        Write-Warning "Found potential VSCode package: $packageName"
-                        try {
-                            $result = choco uninstall $packageName -y --limit-output --force --remove-dependencies 2>$null
-                            if ($LASTEXITCODE -eq 0) {
-                                Write-Success "Removed VSCode package: $packageName"
-                                $removedCount++
-                            } else {
-                                Write-Warning "Could not remove $packageName"
-                            }
-                        } catch {
-                            Write-Warning "Error removing $packageName`: $_"
-                        }
-                        break
-                    }
-                }
-                
-                # Check for Node.js variants  
-                foreach ($pattern in $nodePatterns) {
-                    if ($packageName.Contains($pattern)) {
-                        Write-Warning "Found potential Node.js package: $packageName"
-                        try {
-                            $result = choco uninstall $packageName -y --limit-output --force --remove-dependencies 2>$null
-                            if ($LASTEXITCODE -eq 0) {
-                                Write-Success "Removed Node.js package: $packageName"
-                                $removedCount++
-                            } else {
-                                Write-Warning "Could not remove $packageName"
-                            }
-                        } catch {
-                            Write-Warning "Error removing $packageName`: $_"
-                        }
-                        break
-                    }
-                }
-            }
-        }
-    } catch {
-        Write-Warning "Could not perform comprehensive package search: $_"
     }
 
     # Remove Chocolatey itself (comprehensive cleanup)
