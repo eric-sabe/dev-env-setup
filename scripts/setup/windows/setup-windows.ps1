@@ -1506,14 +1506,19 @@ function Uninstall-DevEnvironment {
         # Try main package name first
         try {
             Write-Info "Attempting to remove $toolName..."
+            Write-TimedInfo "Running: choco uninstall $toolName -y --limit-output --force --remove-dependencies"
             $result = choco uninstall $toolName -y --limit-output --force --remove-dependencies 2>$null
+            Write-TimedInfo "Chocolatey exit code: $LASTEXITCODE"
             if ($LASTEXITCODE -eq 0) {
                 Write-Success "Removed $toolName"
                 $removedCount++
                 $removed = $true
+            } else {
+                Write-Warning "$toolName uninstall returned exit code $LASTEXITCODE"
             }
         }
         catch {
+            Write-Warning "Exception during $toolName uninstall: $($_.Exception.Message)"
             # Continue to try alternatives
         }
         
@@ -1522,7 +1527,9 @@ function Uninstall-DevEnvironment {
             foreach ($alt in $alternatives) {
                 try {
                     Write-Info "Trying alternative package name: $alt"
+                    Write-TimedInfo "Running: choco uninstall $alt -y --limit-output --force --remove-dependencies"
                     $result = choco uninstall $alt -y --limit-output --force --remove-dependencies 2>$null
+                    Write-TimedInfo "Chocolatey exit code: $LASTEXITCODE"
                     if ($LASTEXITCODE -eq 0) {
                         Write-Success "Removed $alt"
                         $removedCount++
@@ -1531,6 +1538,7 @@ function Uninstall-DevEnvironment {
                     }
                 }
                 catch {
+                    Write-Warning "Exception during $alt uninstall: $($_.Exception.Message)"
                     # Continue to next alternative
                 }
             }
@@ -1538,6 +1546,8 @@ function Uninstall-DevEnvironment {
         
         if (-not $removed) {
             Write-Info "$toolName not installed or already removed"
+        } else {
+            Write-TimedInfo "$toolName removal completed successfully"
         }
     }
 
