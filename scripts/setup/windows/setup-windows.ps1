@@ -846,6 +846,34 @@ function Install-WindowsTools {
                         # Continue to next command
                     }
                 }
+            } elseif ($toolName -eq "gitkraken") {
+                # GitKraken is a GUI app that may not be in PATH, check for installation directory
+                $gitKrakenPaths = @(
+                    "$env:LOCALAPPDATA\gitkraken",
+                    "$env:APPDATA\gitkraken",
+                    "$env:ProgramFiles\GitKraken",
+                    "$env:ProgramFiles(x86)\GitKraken"
+                )
+                foreach ($path in $gitKrakenPaths) {
+                    if (Test-Path $path) {
+                        Write-Success "$description already installed (found at $path)"
+                        $alreadyInstalled = $true
+                        $successCount++
+                        break
+                    }
+                }
+                if (-not $alreadyInstalled) {
+                    # Fallback to command check
+                    try {
+                        $null = Get-Command $toolName -ErrorAction Stop
+                        Write-Success "$description already installed"
+                        $alreadyInstalled = $true
+                        $successCount++
+                    }
+                    catch {
+                        # Continue to installation
+                    }
+                }
             } else {
                 $null = Get-Command $toolName -ErrorAction Stop
                 Write-Success "$description already installed"
@@ -1079,6 +1107,27 @@ function Test-Installation {
             # Continue to alternative methods
         }
         
+        # Special handling for GitKraken (GUI app that may not be in PATH)
+        if ($toolName -eq "gitkraken" -and -not $found) {
+            $gitKrakenPaths = @(
+                "$env:LOCALAPPDATA\gitkraken",
+                "$env:APPDATA\gitkraken", 
+                "$env:ProgramFiles\GitKraken",
+                "$env:ProgramFiles(x86)\GitKraken"
+            )
+            foreach ($path in $gitKrakenPaths) {
+                if (Test-Path $path) {
+                    Write-Success "${toolName}: found (at $path)"
+                    $found = $true
+                    break
+                }
+            }
+        }
+        
+        if ($found) {
+            continue
+        }
+        
         # Method 2: Try alternatives in PATH
         foreach ($alt in $tool.alternatives) {
             try {
@@ -1157,6 +1206,7 @@ function Test-Installation {
                         "python" { @("python", "python3") }
                         "mvn" { @("maven") }
                         "gradle" { @("gradle") }
+                        "gitkraken" { @("gitkraken") }
                         default { @($toolName) }
                     }
                     
