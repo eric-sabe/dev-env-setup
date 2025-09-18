@@ -1545,7 +1545,65 @@ function Uninstall-DevEnvironment {
         }
         
         if (-not $removed) {
-            Write-Info "$toolName not installed or already removed"
+            # Special manual cleanup for GitKraken when Chocolatey fails
+            if ($toolName -eq "gitkraken") {
+                Write-Info "GitKraken not found in Chocolatey database, attempting manual cleanup..."
+                $manuallyRemoved = $false
+                
+                # Kill any running GitKraken processes
+                try {
+                    Get-Process | Where-Object { $_.ProcessName -like "*gitkraken*" -or $_.ProcessName -like "*GitKraken*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+                    Write-TimedInfo "Stopped GitKraken processes"
+                } catch {
+                    Write-TimedInfo "No GitKraken processes to stop"
+                }
+                
+                # Remove GitKraken directories manually
+                $gitKrakenPaths = @(
+                    "$env:LOCALAPPDATA\gitkraken",
+                    "$env:APPDATA\gitkraken",
+                    "$env:ProgramFiles\GitKraken",
+                    "$env:ProgramFiles(x86)\GitKraken"
+                )
+                
+                foreach ($path in $gitKrakenPaths) {
+                    if (Test-Path $path) {
+                        try {
+                            Write-TimedInfo "Removing GitKraken directory: $path"
+                            Remove-Item -Path $path -Recurse -Force -ErrorAction Stop
+                            Write-Success "Manually removed GitKraken from: $path"
+                            $manuallyRemoved = $true
+                        } catch {
+                            Write-Warning "Failed to remove GitKraken directory $path : $($_.Exception.Message)"
+                        }
+                    }
+                }
+                
+                # Remove GitKraken from Start Menu
+                $startMenuPaths = @(
+                    "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\GitKraken.lnk",
+                    "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\GitKraken.lnk"
+                )
+                foreach ($shortcut in $startMenuPaths) {
+                    if (Test-Path $shortcut) {
+                        try {
+                            Remove-Item -Path $shortcut -Force
+                            Write-TimedInfo "Removed GitKraken shortcut: $shortcut"
+                        } catch {
+                            Write-Warning "Failed to remove shortcut: $shortcut"
+                        }
+                    }
+                }
+                
+                if ($manuallyRemoved) {
+                    Write-Success "GitKraken manually removed"
+                    $removedCount++
+                } else {
+                    Write-Info "$toolName not installed or already removed"
+                }
+            } else {
+                Write-Info "$toolName not installed or already removed"
+            }
         } else {
             Write-TimedInfo "$toolName removal completed successfully"
         }
