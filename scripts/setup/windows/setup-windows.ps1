@@ -858,6 +858,7 @@ function Install-WindowsTools {
                 # GitKraken is a GUI app that may not be in PATH, check for actual executable
                 # Note: GitKraken leaves behind %LOCALAPPDATA%\gitkraken folder even after uninstall
                 # so we need to check for the actual executable, not just the folder
+                Write-TimedInfo "Checking for existing GitKraken installation..."
                 $gitKrakenExecutables = @(
                     "$env:LOCALAPPDATA\gitkraken\GitKraken.exe",
                     "$env:LOCALAPPDATA\gitkraken\app-*\GitKraken.exe",
@@ -895,6 +896,57 @@ function Install-WindowsTools {
                     }
                 }
                 if (-not $alreadyInstalled) {
+                    Write-TimedInfo "No existing GitKraken executable found, proceeding with installation..."
+                    # Fallback to command check
+                    try {
+                        $null = Get-Command $toolName -ErrorAction Stop
+                        Write-Success "$description already installed"
+                        $alreadyInstalled = $true
+                        $successCount++
+                    }
+                    catch {
+                        # Continue to installation
+                    }
+                }
+            } elseif ($toolName -eq "postman") {
+                # Postman is a GUI app that may not be in PATH, check for actual executable
+                Write-TimedInfo "Checking for existing Postman installation..."
+                $postmanExecutables = @(
+                    "$env:LocalAppData\Postman\Postman.exe",
+                    "$env:LocalAppData\Postman\app-*\Postman.exe",
+                    "$env:ProgramFiles\Postman\Postman.exe",
+                    "$env:ProgramFiles(x86)\Postman\Postman.exe"
+                )
+                foreach ($exePath in $postmanExecutables) {
+                    if ($exePath -like "*app-*") {
+                        # Handle wildcard paths for versioned app directories
+                        $parentDir = Split-Path $exePath -Parent
+                        $baseDir = $parentDir -replace "\\app-\*$", ""
+                        if (Test-Path $baseDir) {
+                            $appDirs = Get-ChildItem -Path $baseDir -Directory -Name "app-*" -ErrorAction SilentlyContinue
+                            foreach ($appDir in $appDirs) {
+                                $fullExePath = Join-Path $baseDir $appDir "Postman.exe"
+                                if (Test-Path $fullExePath) {
+                                    Write-Success "$description already installed (found $fullExePath)"
+                                    $alreadyInstalled = $true
+                                    $successCount++
+                                    break
+                                }
+                            }
+                            if ($alreadyInstalled) { break }
+                        }
+                    } else {
+                        # Handle direct paths
+                        if (Test-Path $exePath) {
+                            Write-Success "$description already installed (found $exePath)"
+                            $alreadyInstalled = $true
+                            $successCount++
+                            break
+                        }
+                    }
+                }
+                if (-not $alreadyInstalled) {
+                    Write-TimedInfo "No existing Postman executable found, proceeding with installation..."
                     # Fallback to command check
                     try {
                         $null = Get-Command $toolName -ErrorAction Stop
@@ -1180,6 +1232,42 @@ function Test-Installation {
                         $appDirs = Get-ChildItem -Path $baseDir -Directory -Name "app-*" -ErrorAction SilentlyContinue
                         foreach ($appDir in $appDirs) {
                             $fullExePath = Join-Path $baseDir $appDir "GitKraken.exe"
+                            if (Test-Path $fullExePath) {
+                                Write-Success "${toolName}: found ($fullExePath)"
+                                $found = $true
+                                break
+                            }
+                        }
+                        if ($found) { break }
+                    }
+                } else {
+                    # Handle direct paths
+                    if (Test-Path $exePath) {
+                        Write-Success "${toolName}: found ($exePath)"
+                        $found = $true
+                        break
+                    }
+                }
+            }
+        }
+        
+        # Special handling for Postman (GUI app that may not be in PATH)
+        if ($toolName -eq "postman" -and -not $found) {
+            $postmanExecutables = @(
+                "$env:LocalAppData\Postman\Postman.exe",
+                "$env:LocalAppData\Postman\app-*\Postman.exe",
+                "$env:ProgramFiles\Postman\Postman.exe",
+                "$env:ProgramFiles(x86)\Postman\Postman.exe"
+            )
+            foreach ($exePath in $postmanExecutables) {
+                if ($exePath -like "*app-*") {
+                    # Handle wildcard paths for versioned app directories
+                    $parentDir = Split-Path $exePath -Parent
+                    $baseDir = $parentDir -replace "\\app-\*$", ""
+                    if (Test-Path $baseDir) {
+                        $appDirs = Get-ChildItem -Path $baseDir -Directory -Name "app-*" -ErrorAction SilentlyContinue
+                        foreach ($appDir in $appDirs) {
+                            $fullExePath = Join-Path $baseDir $appDir "Postman.exe"
                             if (Test-Path $fullExePath) {
                                 Write-Success "${toolName}: found ($fullExePath)"
                                 $found = $true
