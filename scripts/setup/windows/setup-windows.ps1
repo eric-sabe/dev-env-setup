@@ -1453,6 +1453,55 @@ function Uninstall-DevEnvironment {
     Write-Host ""
     Write-Host "Starting uninstallation..." -ForegroundColor Red
 
+    # Ensure Chocolatey is available in current session if it exists
+    Write-Info "Checking Chocolatey availability..."
+    if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
+        Write-Warning "Chocolatey command not found in current session, attempting to refresh environment..."
+        
+        # Try to detect and load Chocolatey if it exists
+        $chocoInstall = $env:ChocolateyInstall
+        if (-not $chocoInstall) {
+            $chocoInstall = "$env:ProgramData\chocolatey"
+        }
+        
+        if (Test-Path "$chocoInstall\bin\choco.exe") {
+            Write-Info "Found Chocolatey installation at: $chocoInstall"
+            
+            # Add Chocolatey to current session PATH
+            $currentPath = $env:PATH
+            $chocoBinPath = "$chocoInstall\bin"
+            if ($currentPath -notlike "*$chocoBinPath*") {
+                $env:PATH = "$chocoBinPath;$currentPath"
+                Write-Info "Added Chocolatey to current session PATH"
+            }
+            
+            # Set ChocolateyInstall environment variable for current session
+            $env:ChocolateyInstall = $chocoInstall
+            
+            # Try to import Chocolatey profile for refreshenv
+            $chocoProfile = "$chocoInstall\helpers\chocolateyProfile.psm1"
+            if (Test-Path $chocoProfile) {
+                try {
+                    Import-Module $chocoProfile -Force
+                    Write-Info "Imported Chocolatey profile for current session"
+                } catch {
+                    Write-Warning "Could not import Chocolatey profile: $($_.Exception.Message)"
+                }
+            }
+            
+            # Verify choco command is now available
+            if (Get-Command choco -ErrorAction SilentlyContinue) {
+                Write-Success "Chocolatey is now available in current session"
+            } else {
+                Write-Warning "Could not make Chocolatey available in current session"
+            }
+        } else {
+            Write-Info "No Chocolatey installation found at expected location: $chocoInstall"
+        }
+    } else {
+        Write-Success "Chocolatey is already available in current session"
+    }
+
     # Remove Chocolatey packages (skip critical system tools)
     Write-Info "Removing Chocolatey packages..."
     
@@ -1479,20 +1528,31 @@ function Uninstall-DevEnvironment {
 
     # First, let's see what packages are actually installed
     Write-Info "Checking currently installed Chocolatey packages..."
+    $chocoAvailable = $false
     try {
-        $installedPackages = choco list --local-only --limit-output 2>$null
-        if ($installedPackages) {
-            Write-Host "Found these packages:" -ForegroundColor Cyan
-            $installedPackages | ForEach-Object { 
-                $packageInfo = $_ -split '\|'
-                if ($packageInfo.Count -ge 1) {
-                    Write-Host "  - $($packageInfo[0])" -ForegroundColor Gray
+        # Check if Chocolatey is available
+        if (Get-Command choco -ErrorAction SilentlyContinue) {
+            $installedPackages = choco list --local-only --limit-output 2>$null
+            if ($LASTEXITCODE -eq 0 -and $installedPackages) {
+                $chocoAvailable = $true
+                Write-Host "Found these packages:" -ForegroundColor Cyan
+                $installedPackages | ForEach-Object { 
+                    $packageInfo = $_ -split '\|'
+                    if ($packageInfo.Count -ge 1) {
+                        Write-Host "  - $($packageInfo[0])" -ForegroundColor Gray
+                    }
                 }
+                Write-Host ""
+            } else {
+                Write-Info "Chocolatey is available but no packages are listed"
             }
-            Write-Host ""
+        } else {
+            Write-Warning "Chocolatey (choco) command not found - was it already removed?"
+            Write-Info "Will skip Chocolatey-based uninstall and use Windows native uninstallers only"
         }
     } catch {
-        Write-Warning "Could not list installed packages: $_"
+        Write-Warning "Could not check Chocolatey packages: $_"
+        Write-Info "Will skip Chocolatey-based uninstall and use Windows native uninstallers only"
     }
 
     # Function to find and execute Windows native uninstaller
@@ -1620,8 +1680,8 @@ function Uninstall-DevEnvironment {
         Write-Info "Attempting to remove $toolName using Windows uninstaller..."
         $removed = Invoke-WindowsUninstaller -AppName $toolName -SearchTerms $searchTerms
         
-        # Step 2: Fall back to Chocolatey if Windows uninstaller failed
-        if (-not $removed) {
+        # Step 2: Fall back to Chocolatey if Windows uninstaller failed (and Chocolatey is available)
+        if (-not $removed -and $chocoAvailable) {
             Write-Info "Falling back to Chocolatey for $toolName..."
             try {
                 Write-TimedInfo "Running: choco uninstall $toolName -y --limit-output --force --remove-dependencies"
@@ -1659,6 +1719,8 @@ function Uninstall-DevEnvironment {
                     }
                 }
             }
+        } elseif (-not $removed -and -not $chocoAvailable) {
+            Write-Info "Skipping Chocolatey fallback for $toolName (Chocolatey not available)"
         } else {
             $removedCount++
         }
@@ -1680,10 +1742,7 @@ function Uninstall-DevEnvironment {
     # Remove Chocolatey itself (comprehensive cleanup)
     Write-Info "Removing Chocolatey completely..."
     try {
-        # Stop any running Chocolatey processes
-        Get-Process | Where-Object { $_.ProcessName -like "*choco*" } | Stop-Process -Force -ErrorAction SilentlyContinue
-        
-        # Remove Chocolatey directories
+        # Check if Chocolatey directories exist before trying to remove
         $chocoLocations = @(
             "$env:ChocolateyInstall",
             "$env:ProgramData\chocolatey",
@@ -1691,9 +1750,24 @@ function Uninstall-DevEnvironment {
             "$env:SystemDrive\ProgramData\chocolatey"
         )
         
-        $removedCount = 0
+        $foundLocations = @()
         foreach ($location in $chocoLocations) {
             if ($location -and (Test-Path $location)) {
+                $foundLocations += $location
+            }
+        }
+        
+        if ($foundLocations.Count -eq 0) {
+            Write-Info "No Chocolatey installation found to remove"
+        } else {
+            Write-Info "Found Chocolatey installations at: $($foundLocations -join ', ')"
+            
+            # Stop any running Chocolatey processes
+            Get-Process | Where-Object { $_.ProcessName -like "*choco*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+            
+            # Remove Chocolatey directories
+            $removedCount = 0
+            foreach ($location in $foundLocations) {
                 try {
                     # Take ownership and remove read-only attributes
                     Get-ChildItem -Path $location -Recurse -Force | ForEach-Object {
@@ -1706,34 +1780,32 @@ function Uninstall-DevEnvironment {
                     Write-Warning "Could not fully remove $location`: $($_.Exception.Message)"
                 }
             }
-        }
-        
-        # Remove Chocolatey from environment variables
-        $currentPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
-        if ($currentPath) {
-            $chocoPathPatterns = @(
-                "$env:ChocolateyInstall\bin",
-                "$env:ProgramData\chocolatey\bin",
-                "$env:ALLUSERSPROFILE\chocolatey\bin"
-            )
             
-            foreach ($pattern in $chocoPathPatterns) {
-                if ($pattern) {
-                    $currentPath = $currentPath -replace [regex]::Escape($pattern + ";"), ""
-                    $currentPath = $currentPath -replace [regex]::Escape($pattern), ""
+            # Remove Chocolatey from environment variables
+            $currentPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+            if ($currentPath) {
+                $chocoPathPatterns = @(
+                    "$env:ChocolateyInstall\bin",
+                    "$env:ProgramData\chocolatey\bin",
+                    "$env:ALLUSERSPROFILE\chocolatey\bin"
+                )
+                
+                foreach ($pattern in $chocoPathPatterns) {
+                    if ($pattern) {
+                        $currentPath = $currentPath -replace [regex]::Escape($pattern + ";"), ""
+                        $currentPath = $currentPath -replace [regex]::Escape($pattern), ""
+                    }
                 }
+                [Environment]::SetEnvironmentVariable("Path", $currentPath, "Machine")
             }
-            [Environment]::SetEnvironmentVariable("Path", $currentPath, "Machine")
-        }
-        
-        # Remove ChocolateyInstall environment variable
-        [Environment]::SetEnvironmentVariable("ChocolateyInstall", $null, "Machine")
-        [Environment]::SetEnvironmentVariable("ChocolateyInstall", $null, "User")
-        
-        if ($removedCount -gt 0) {
-            Write-Success "Chocolatey completely removed from $removedCount location(s)"
-        } else {
-            Write-Info "No Chocolatey installation found to remove"
+            
+            # Remove ChocolateyInstall environment variable
+            [Environment]::SetEnvironmentVariable("ChocolateyInstall", $null, "Machine")
+            [Environment]::SetEnvironmentVariable("ChocolateyInstall", $null, "User")
+            
+            if ($removedCount -gt 0) {
+                Write-Success "Chocolatey completely removed from $removedCount location(s)"
+            }
         }
     }
     catch {
